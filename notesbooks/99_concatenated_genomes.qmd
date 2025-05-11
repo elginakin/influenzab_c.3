@@ -1,0 +1,775 @@
+---
+title: "Nextstrain Concatenated Genome Builds from GISAID Data"
+author: Elgin Akin
+date: 2025-04-18
+---
+
+# Starting Data + Configuration
+
+## Build and activate conda environment
+
+```{shell}
+#| eval: false
+conda env create -f environment.yml
+```
+
+```{shell}
+#| eval: false
+conda activate flu
+```
+
+# GISAID Data Cleaning
+
+## Remove Name duplicates and sequences with illegal nucleotide characters
+```{shell}
+#| eval: false
+
+# h1n1 
+seqkit rmdup -n source/gisaid_h1n1_sequences.fasta > source/gisaid_h1n1_sequences.rmdup.fasta
+seqkit grep -s -r -i -p "^[ATCGatcg]+$" source/gisaid_h1n1_sequences.rmdup.fasta > source/gisaid_h1n1_sequences.rmdupn.noambig.fasta
+
+# h3n2
+seqkit rmdup -n source/gisaid_h3n2_sequences.fasta > source/gisaid_h3n2_sequences.rmdup.fasta
+seqkit grep -s -r -i -p "^[ATCGatcg]+$" source/gisaid_h3n2_sequences.rmdup.fasta > source/gisaid_h3n2_sequences.rmdupn.noambig.fasta
+
+# ibv victoria (vic)
+seqkit rmdup -n source/gisaid_vic_sequences.fasta > source/gisaid_vic_sequences.rmdup.fasta
+seqkit grep -s -r -i -p "^[ATCGatcg]+$" source/gisaid_vic_sequences.rmdup.fasta > source/gisaid_vic_sequences.rmdupn.noambig.fasta
+
+```
+
+## Downselection of GISAID Data with fludb and augur
+
+1. Uplaod entire database with H1N1 and H3N2 sequences from:
+   1. GISAID 
+   2. JHH (Mostafa lab)
+2. Query complete genomes
+3. Concatenate all genomes
+4. Augur filter - representative sequences (include all macha isolates)
+5. Proceed with build
+
+# Genome Cleaning - Initiate fludb and query sequences
+```{shell}
+#| eval: false
+python fludb/scripts/fludb_initiate.py
+```
+
+## Upload CEIRR and GISAID sequences to fludb
+
+### CIERR JHH 
+```{shell}
+#| eval: false
+python fludb/scripts/upload_jhh.py \
+    -d fludb.db \
+    -f source/flusort_JHH_sequences.fasta \
+    -m source/flusort_JHH_metadata.tsv \
+    --require-sequence
+```
+
+### Vaccines 
+
+```{shell}
+#| eval: false
+python fludb/scripts/upload_vaccine.py \
+    -d fludb.db \
+    -f source/vaccine.fasta
+```
+
+### GISAID
+```{shell}
+#| eval: false
+
+# upload h1n1 
+python fludb/scripts/upload_gisaid.py \
+    -d fludb.db \
+    -f source/gisaid_h1n1_sequences.rmdupn.noambig.fasta \
+    -m source/gisaid_h1n1_metadata.xls
+
+# upload h3n2
+python fludb/scripts/upload_gisaid.py \
+    -d fludb.db \
+    -f source/gisaid_h3n2_sequences.rmdupn.noambig.fasta \
+    -m source/gisaid_h3n2_metadata.xls
+
+# upload vic
+python fludb/scripts/upload_gisaid.py \
+    -d fludb.db \
+    -f source/gisaid_vic_sequences.rmdupn.noambig.fasta \
+    -m source/gisaid_vic_metadata.xls
+
+```
+
+
+## Data Query (downloading) 
+
+- download all complete genomes
+- Ignore "WATER" negative controls
+- Complete genomes 
+
+### Download all complete influenza genomes
+
+These 2 scripts will download h1, h3 and vic genome and ha from fludb. 
+
+```{shell}
+#| eval: false
+
+# downloads genomes
+python scripts/fludb_download_seasonal_build_genomes.py
+
+# download ha segment only 
+python scripts/fludb_download_seasonal_build.py
+```
+
+### Query Unique Isolates 
+
+Build a query to ask
+1. How many unique sample_IDs with HA sequences
+2. How many unique sample_IDs with HA and NA sequences
+3. How many unique sample_IDs with complete genomes (8 segment sequences)
+
+```{python}
+#| eval: false
+import sqlite3
+
+# Connect to the SQLite database
+conn = sqlite3.connect('../fludb.db')  # Replace with your database path
+cursor = conn.cursor()
+
+# Query 1: Unique sample_IDs with HA sequences
+query_ha = """
+    SELECT COUNT(DISTINCT sample_ID) 
+    FROM influenza_genomes
+    WHERE ha IS NOT NULL;
+"""
+ha_count = cursor.execute(query_ha).fetchone()[0]
+print(f"Unique sample_IDs with HA sequences: {ha_count}")
+
+# Query 2: Unique sample_IDs with HA and NA sequences
+query_ha_na = """
+    SELECT COUNT(DISTINCT sample_ID)
+    FROM influenza_genomes
+    WHERE ha IS NOT NULL AND na IS NOT NULL;
+"""
+ha_na_count = cursor.execute(query_ha_na).fetchone()[0]
+print(f"Unique sample_IDs with HA and NA sequences: {ha_na_count}")
+
+# Query 3: Unique sample_IDs with complete genomes (8 segment sequences)
+query_complete_genome = """
+    SELECT COUNT(DISTINCT sample_ID)
+    FROM influenza_genomes
+    WHERE pb2 IS NOT NULL AND pb1 IS NOT NULL AND pa IS NOT NULL
+          AND ha IS NOT NULL AND np IS NOT NULL AND na IS NOT NULL
+          AND mp IS NOT NULL AND ns IS NOT NULL;
+"""
+complete_genome_count = cursor.execute(query_complete_genome).fetchone()[0]
+print(f"Unique sample_IDs with complete genomes: {complete_genome_count}")
+
+# Close the connection
+conn.close()
+```
+
+## HA Clade Assignment
+
+### Call Clades
+
+Assigns clades to all isolates pre-downsample. Be sure to left join this againt the filtered.tsv
+```{shell}
+#| eval: false
+
+# h1n1
+nextclade run \
+    -D nextclade/flu/h1n1/ha/ \
+    -t results/h1n1/ha/nextclade.tsv \
+    -o results/h1n1/ha/nextclade_aligned.fasta \
+    data/h1n1/ha/sequences.fasta
+
+# h3n2
+nextclade run \
+    -D nextclade/flu/h3n2/ha/ \
+    -t results/h3n2/ha/nextclade.tsv \
+    -o results/h3n2/ha/nextclade_aligned.fasta \
+    data/h3n2/ha/sequences.fasta
+
+# vic
+nextclade run \
+    -D nextclade/flu/vic/ha/ \
+    -t results/vic/ha/nextclade.tsv \
+    -o results/vic/ha/nextclade_aligned.fasta \
+    data/vic/ha/sequences.fasta
+
+```
+
+## Cat Genome length histogram
+
+```{shell}
+#| eval: false
+seqkit watch --fields ReadLen data/h1n1/genome/sequences.fasta -O figures/h1n1_genome_length.png
+
+seqkit watch --fields ReadLen data/h3n2/genome/sequences.fasta -O figures/h3n2_genome_length.png
+
+seqkit watch --fields ReadLen data/h3n2/genome/sequences.fasta -O figures/vic_genome_length.png
+```
+
+# Data Filtering augur filter - proceed with complete genomes only 
+## Expand the `location` column in HA metadata to house continent and country in 2 seperate columns. Ignore levels 3 and 4 in location column as most rows do not have this information.
+
+TODO: can we rewrite this with csvtk to be more streamlined? 
+
+Function to extract region, country, and division from 
+
+```{python}
+import pandas as pd
+
+def split_location(df, location_col="location", sequence_id_col="sequence_ID", sample_id_col="sample_ID"):
+    """
+    Enhances a metadata dataframe by splitting the location column and creating a strain column.
+
+    Parameters:
+        df (pd.DataFrame): Input DataFrame.
+        location_col (str): Name of the column to split by " / ".
+        sequence_id_col (str): Name of the sequence ID column.
+        sample_id_col (str): Name of the sample ID column.
+
+    Returns:
+        pd.DataFrame: Enhanced DataFrame with added region, country, division, location_detailed, and strain columns.
+    """
+
+    def extract_levels(row, level):
+        if isinstance(row, str):
+            parts = row.split(" / ")
+            return parts[level] if len(parts) > level else None
+        return None
+
+    # Apply location splitting
+    df["region"] = df[location_col].apply(lambda x: extract_levels(x, 0))
+    df["country"] = df[location_col].apply(lambda x: extract_levels(x, 1))
+    df["division"] = df[location_col].apply(lambda x: extract_levels(x, 2))
+    df["location_detailed"] = df[location_col].apply(lambda x: extract_levels(x, 3))
+
+    # Create strain column
+    df["strain"] = df[sequence_id_col].astype(str) + "_" + df[sample_id_col].astype(str)
+
+
+    return df
+
+h1n1_locations = pd.read_csv("../data/h1n1/genome/metadata.tsv", delimiter="\t")
+h3n2_locations = pd.read_csv("../data/h3n2/genome/metadata.tsv", delimiter="\t")
+vic_locations = pd.read_csv("../data/vic/genome/metadata.tsv", delimiter="\t")
+
+h1n1_locations = split_location(h1n1_locations)
+h3n2_locations = split_location(h3n2_locations) 
+vic_locations = split_location(vic_locations) 
+
+h1n1_locations.to_csv("../results/h1n1/genome/metadata.tsv", sep = "\t", index = False)
+h3n2_locations.to_csv("../results/h3n2/genome/metadata.tsv", sep = "\t", index = False)
+vic_locations.to_csv("../results/vic/genome/metadata.tsv", sep = "\t", index = False)
+
+```
+
+
+## Augur filter Downselection 
+
+### h1n1 
+
+#### filter only jhh isolates
+ ```{shell}
+ #| eval: false
+augur filter \
+    --metadata results/h1n1/genome/metadata.tsv\
+    --sequences data/h1n1/genome/sequences.fasta \
+    --min-length 13000 \
+    --metadata-id-columns "sequence_ID" \
+    --query "(location == 'JHH')" \
+    --output-metadata results/h1n1/genome/jhh_filtered.tsv \
+    --output-sequences results/h1n1/genome/jhh_filtered.fasta
+ ```
+
+#### filter and down-selected gisaid isolates
+
+```{shell}
+#| eval: false
+augur filter \
+    --metadata results/h1n1/genome/metadata.tsv\
+    --sequences data/h1n1/genome/sequences.fasta \
+    --min-length 13000 \
+    --metadata-id-columns "sequence_ID" \
+    --exclude-where "location=JHH" \
+    --group-by week country \
+    --subsample-max-sequences 2000 \
+    --subsample-seed 180 \
+    --output-metadata results/h1n1/genome/gisaid_filtered.tsv \
+    --output-sequences results/h1n1/genome/gisaid_filtered.fasta
+```
+
+#### join filtered gisaid and jhh FASTA and metadata
+
+join filtered metadata
+```{shell}
+#| eval: false
+csvtk -t concat \
+    results/h1n1/genome/gisaid_filtered.tsv \
+    results/h1n1/genome/jhh_filtered.tsv \
+    > results/h1n1/genome/filtered.tsv
+```
+
+join filtered fasta 
+```{shell}
+cat \
+    results/h1n1/genome/gisaid_filtered.fasta \
+    results/h1n1/genome/jhh_filtered.fasta \
+    > results/h1n1/genome/filtered.fasta
+
+```
+
+### h3n2
+
+#### filter only jhh isolates
+ ```{shell}
+ #| eval: false
+augur filter \
+    --metadata results/h3n2/genome/metadata.tsv\
+    --sequences data/h3n2/genome/sequences.fasta \
+    --min-length 13000 \
+    --metadata-id-columns "sequence_ID" \
+    --query "(location == 'JHH')" \
+    --output-metadata results/h3n2/genome/jhh_filtered.tsv \
+    --output-sequences results/h3n2/genome/jhh_filtered.fasta
+ ```
+
+#### filter and down-selected gisaid isolates
+
+```{shell}
+#| eval: false
+augur filter \
+    --metadata results/h3n2/genome/metadata.tsv\
+    --sequences data/h3n2/genome/sequences.fasta \
+    --min-length 13000 \
+    --metadata-id-columns "sequence_ID" \
+    --exclude-where "location=JHH" \
+    --group-by week country \
+    --subsample-max-sequences 2000 \
+    --subsample-seed 180 \
+    --output-metadata results/h3n2/genome/gisaid_filtered.tsv \
+    --output-sequences results/h3n2/genome/gisaid_filtered.fasta
+```
+
+#### join filtered gisaid and jhh FASTA and metadata
+
+### vic
+
+#### filter only jhh isolates
+ ```{shell}
+ #| eval: false
+augur filter \
+    --metadata results/vic/genome/metadata.tsv\
+    --sequences data/vic/genome/sequences.fasta \
+    --exclude config/exclude.tsv \
+    --min-length 13000 \
+    --metadata-id-columns "sequence_ID" \
+    --query "(location == 'JHH')" \
+    --output-metadata results/vic/genome/jhh_filtered.tsv \
+    --output-sequences results/vic/genome/jhh_filtered.fasta
+ ```
+
+#### filter and down-selected gisaid isolates
+
+```{shell}
+#| eval: false
+augur filter \
+    --metadata results/vic/genome/metadata.tsv\
+    --sequences data/vic/genome/sequences.fasta \
+    --min-length 13000 \
+    --metadata-id-columns "sequence_ID" \
+    --exclude-where "location=JHH" \
+    --group-by week country \
+    --subsample-max-sequences 2000 \
+    --subsample-seed 180 \
+    --output-metadata results/vic/genome/gisaid_filtered.tsv \
+    --output-sequences results/vic/genome/gisaid_filtered.fasta
+```
+
+#### join filtered gisaid and jhh FASTA and metadata
+
+join filtered metadata
+```{shell} 
+#| eval: false
+csvtk -t concat \
+    results/vic/genome/gisaid_filtered.tsv \
+    results/vic/genome/jhh_filtered.tsv \
+    > results/vic/genome/filtered.tsv
+```
+
+join filtered fasta 
+```{shell}
+#| eval: False
+cat \
+    results/vic/genome/gisaid_filtered.fasta \
+    results/vic/genome/jhh_filtered.fasta \
+    > results/vic/genome/filtered.fasta
+```
+
+# Append Clade data to `filtered.tsv`
+
+```{shell}
+#| eval: false
+
+#h1n1
+csvtk -t join -f "sequence_ID;seqName" \
+    results/h1n1/genome/filtered.tsv \
+    results/h1n1/ha/nextclade.tsv \
+    --left-join \
+    > results/h1n1/genome/filtered_clades.tsv
+
+# h3n2 
+csvtk -t join -f "sequence_ID;seqName" \
+    results/h3n2/genome/filtered.tsv \
+    results/h3n2/ha/nextclade.tsv \
+    --left-join \
+    > results/h3n2/genome/filtered_clades.tsv
+
+# vic 
+csvtk -t join -f "sequence_ID;seqName" \
+    results/vic/genome/filtered.tsv \
+    results/vic/ha/nextclade.tsv \
+    --left-join \
+    > results/vic/genome/filtered_clades.tsv
+```
+
+
+# Align concatenated Genomes 
+
+TODO: The cattle H5N1 build aligns each segment individually and then prceeds with concatenating each alignment...consider this moving forward given that confidence intervals are still needed to calculate TMRCA for each identified mutation per segment.
+
+```{shell}
+#| eval: false
+
+# h1n1 
+augur align \
+    --sequences results/h1n1/genome/filtered.fasta \
+    --output results/h1n1/genome/aligned.fasta \
+    --reference-sequence config/h1n1/genome.gb \
+    --fill-gaps \
+    --remove-reference \
+    --nthreads 80
+
+# h3n2 
+augur align \
+    --sequences results/h3n2/genome/filtered.fasta \
+    --output results/h3n2/genome/aligned.fasta \
+    --reference-sequence config/h3n2/genome.gb \
+    --fill-gaps \
+    --remove-reference \
+    --nthreads 80
+
+# vic
+augur align \
+    --sequences results/vic/genome/filtered.fasta \
+    --output results/vic/genome/aligned.fasta \
+    --reference-sequence config/vic/genome.gb \
+    --fill-gaps \
+    --remove-reference \
+    --nthreads 200
+```
+
+# Build Raw Trees
+```{shell}
+#| eval: false
+
+# h1n1 
+augur tree \
+    --nthreads 64 \
+    --alignment results/h1n1/genome/aligned.fasta \
+    --output results/h1n1/genome/tree_raw.nwk
+
+# h3n2
+augur tree \
+    --nthreads 64 \
+    --alignment results/h3n2/genome/aligned.fasta \
+    --output results/h3n2/genome/tree_raw.nwk
+
+# vic
+augur tree \
+    --nthreads 100 \
+    --alignment results/vic/genome/aligned.fasta \
+    --output results/vic/genome/tree_raw.nwk
+```
+
+# Refine raw tree 
+
+Be sure to use `--stochastic-resolve` 
+
+```{shell}
+#| eval: false
+# h1n1
+augur refine \
+    --tree results/h1n1/genome/tree_raw.nwk \
+    --alignment results/h1n1/genome/aligned.fasta \
+    --metadata results/h1n1/genome/filtered_clades.tsv \
+    --metadata-id-columns "sequence_ID" \
+    --output-tree results/h1n1/genome/tree.nwk \
+    --output-node-data results/h1n1/genome/branch_lengths.json \
+    --timetree \
+    --date-confidence \
+    --clock-std-dev 0.00211 \
+    --stochastic-resolve \
+    --coalescent "opt" \
+    --date-inference "marginal"
+
+# h3n2 
+augur refine \
+    --tree results/h3n2/genome/tree_raw.nwk \
+    --alignment results/h3n2/genome/aligned.fasta \
+    --metadata results/h3n2/genome/filtered_clades.tsv \
+    --metadata-id-columns "sequence_ID" \
+    --output-tree results/h3n2/genome/tree.nwk \
+    --output-node-data results/h3n2/genome/branch_lengths.json \
+    --timetree \
+    --date-confidence \
+    --clock-std-dev 0.00211 \
+    --stochastic-resolve \
+    --coalescent "opt" \
+    --date-inference "marginal"
+
+# vic 
+augur refine \
+    --tree results/vic/genome/tree_raw.nwk \
+    --alignment results/vic/genome/aligned.fasta \
+    --metadata results/vic/genome/filtered_clades.tsv \
+    --metadata-id-columns "sequence_ID" \
+    --output-tree results/vic/genome/tree.nwk \
+    --output-node-data results/vic/genome/branch_lengths.json \
+    --timetree \
+    --date-confidence \
+    --clock-std-dev 0.00211 \
+    --stochastic-resolve \
+    --coalescent "opt" \
+    --verbosity 6 /
+    --date-inference "marginal"
+```
+
+## Defining the genomic evolutionary rate
+
+What is the most appropriate way to calculate the clock rate for the entire genome? Louise Moncla's build calculates the average of the segments weighted by each of their lengths as defined [here](https://github.com/nextstrain/avian-flu/blob/387e6427d80c6d72559505a0d7362af24b97dca9/Snakefile#L183). The standard deviation here is calculated using the `--clock-std-dev` flag and has been set to 0.002 in the seasonal-flu builds and 0.00211 in the H5N1 cattle builds. 
+
+>        --clock-rate {define} \
+>        --clock-std-dev = 0.002 \ #defined by other builds 
+
+## Run timetree clock
+
+output: 
+- Skyline
+- mutation accelaration? 
+
+# Annotate Traits 
+
+```{shell}
+#| eval: false
+
+# h1n1 
+
+augur traits \
+    --tree results/h1n1/genome/tree.nwk \
+    --metadata results/h1n1/genome/filtered_clades.tsv \
+    --metadata-id-columns "sequence_ID" \
+    --output-node-data results/h1n1/genome/traits.json \
+    --columns clade subclade region country 
+
+
+# h3n2 
+augur traits \
+    --tree results/h3n2/genome/tree.nwk \
+    --metadata results/h3n2/genome/filtered_clades.tsv \
+    --metadata-id-columns "sequence_ID" \
+    --output-node-data results/h3n2/genome/traits.json \
+    --columns clade subclade region country 
+
+# vic 
+augur traits \
+    --tree results/vic/genome/tree.nwk \
+    --metadata results/vic/genome/filtered_clades.tsv \
+    --metadata-id-columns "sequence_ID" \
+    --output-node-data results/vic/genome/traits.json \
+    --columns clade subclade region country 
+
+```
+
+# Infer Ancestral States
+
+```{shell}
+#| eval: false
+
+# h1n1
+augur ancestral \
+    --tree results/h1n1/genome/tree.nwk \
+    --alignment results/h1n1/genome/aligned.fasta \
+    --output-node-data results/h1n1/genome/nt_muts.json \
+    --inference "joint"
+
+# h3n2
+
+augur ancestral \
+    --tree results/h3n2/genome/tree.nwk \
+    --alignment results/h3n2/genome/aligned.fasta \
+    --output-node-data results/h3n2/genome/nt_muts.json \
+    --inference "joint"
+
+# vic
+
+augur ancestral \
+    --tree results/vic/genome/tree.nwk \
+    --alignment results/vic/genome/aligned.fasta \
+    --output-node-data results/vic/genome/nt_muts.json \
+    --inference "joint"
+```
+
+# Translate
+```{shell}
+#| eval: false
+
+# h1n1 
+augur translate \
+    --tree results/h1n1/genome/tree.nwk \
+    --ancestral-sequences results/h1n1/genome/nt_muts.json \
+    --reference-sequence config/h1n1/genome.gb \
+    --output-node-data results/h1n1/genome/aa_muts.json
+
+# h3n2
+augur translate \
+    --tree results/h3n2/genome/tree.nwk \
+    --ancestral-sequences results/h3n2/genome/nt_muts.json \
+        --reference-sequence config/h3n2/genome.gb \
+    --output-node-data results/h3n2/genome/aa_muts.json
+
+# vic
+augur translate \
+    --tree results/vic/genome/tree.nwk \
+    --ancestral-sequences results/vic/genome/nt_muts.json \
+    --reference-sequence config/vic/genome.gb \
+    --output-node-data results/vic/genome/aa_muts.json
+
+```
+
+# Export
+
+```{shell}
+#| eval: false
+augur export v2 \
+    --tree results/h1n1/genome/tree.nwk \
+    --metadata results/h1n1/genome/filtered_clades.tsv \
+    --description config/description.md \
+    --lat-longs config/lat_long.tsv \
+    --geo-resolutions region country \
+    --node-data \
+    results/h1n1/genome/branch_lengths.json \
+    results/h1n1/genome/traits.json \
+    results/h1n1/genome/nt_muts.json \
+    results/h1n1/genome/aa_muts.json \
+    --auspice-config config/h1n1/auspice_config.json \
+    --output auspice/h1n1/genome.json
+
+augur export v2 \
+    --tree results/h3n2/genome/tree.nwk \
+    --metadata results/h3n2/genome/filtered_clades.tsv \
+    --description config/description.md \
+    --lat-longs config/lat_long.tsv \
+    --geo-resolutions region country \
+    --node-data \
+    results/h3n2/genome/branch_lengths.json \
+    results/h3n2/genome/traits.json \
+    results/h3n2/genome/nt_muts.json \
+    results/h3n2/genome/aa_muts.json \
+    --auspice-config config/h3n2/auspice_config.json \
+    --output auspice/h3n2/genome.json
+
+augur export v2 \
+    --tree results/vic/genome/tree.nwk \
+    --metadata results/vic/genome/filtered_clades.tsv \
+    --description config/description.md \
+    --lat-longs config/lat_long.tsv \
+    --geo-resolutions region country \
+    --node-data \
+    results/vic/genome/branch_lengths.json \
+    results/vic/genome/traits.json \
+    results/vic/genome/nt_muts.json \
+    results/vic/genome/aa_muts.json \
+    --auspice-config config/vic/auspice_config.json \
+    --output auspice/vic/genome.json
+```
+
+# Augur Frequencies
+
+Frequencies is must be exported as ${name}_tip-frequencies.json with the name being the exported name build  https://docs.nextstrain.org/en/latest/reference/data-formats.html
+Be sure that the name matches the build output name as listed above! 
+
+Make sure this is exported to the auspice folder for proper export
+
+```{shell}
+
+# h1n1 
+augur frequencies \
+    --method kde \
+    --tree results/h1n1/genome/tree.nwk \
+    --narrow-bandwidth 0.25 \
+    --wide-bandwidth 0.083 \
+    --proportion-wide 0.02 \
+    --pivot-interval 1 \
+    --include-internal-nodes \
+    --metadata results/h1n1/genome/filtered_clades.tsv \
+    --output auspice/h1n1/genome_tip-frequencies.json 
+
+# h3n2
+
+augur frequencies \
+    --method kde \
+    --tree results/h3n2/genome/tree.nwk \
+    --narrow-bandwidth 0.25 \
+    --wide-bandwidth 0.083 \
+    --proportion-wide 0.02 \
+    --pivot-interval 1 \
+    --include-internal-nodes \
+    --metadata results/h3n2/genome/filtered_clades.tsv \
+    --output auspice/h3n2/genome_tip-frequencies.json 
+
+# vic
+
+augur frequencies \
+    --method kde \
+    --tree results/vic/genome/tree.nwk \
+    --include-internal-nodes \
+    --metadata results/vic/genome/filtered_clades.tsv \
+    --output auspice/vic/genome_tip-frequencies.json 
+```
+
+    --min-date 2020.0 \
+    --max-date 2024.0 \
+
+# Test on local auspice 
+
+```{shell}
+auspice view --datasetDir auspice/
+```
+
+# Upload to Pekosz Lab Private Nextstrain
+
+> **For Pekosz Lab Nextstrain editors only**
+
+```{shell}
+#| eval: false
+nextstrain login
+```
+
+```{shell}
+#| eval: false
+
+# h1n1
+nextstrain remote upload \
+    nextstrain.org/groups/PekoszLab/eakin/global/h1n1/2yr.json \
+    auspice/h1n1/genome.json
+
+# h3n2
+nextstrain remote upload \
+    nextstrain.org/groups/PekoszLab/akine/global/h3n2/2yr.json \
+    auspice/h3n2/genome.json
+```
+
+

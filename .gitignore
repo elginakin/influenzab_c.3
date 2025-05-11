@@ -1,0 +1,48 @@
+# Specify the files that we would like to keep out of the Pekosz Lab Nextstrain repository
+
+# Sensitive Directories
+source/
+data/
+results/
+auspice/
+figures/
+logs/
+reports/
+
+# database files 
+*.db
+**.db
+
+# OS Generated #
+*DS_Store
+*DS_Store?
+**DS_Store
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+ehthumbs.db
+Thumbs.db
+*~
+notebooks/.vdoc.*.sh
+
+# Sensitive environment variables
+
+# R or Python notebook (jupyter or rmarkdown intermediate files)
+*.vdoc.r
+*.vdoc.python
+
+# All Snakemake files
+.snake*/ 
+
+#Jupyter 
+.ipynb_checkpoints
+geckodriver.log
+
+# cluster logs
+slurm-*
+
+# flusort diagnostics
+scripts/flusort/flusort_out

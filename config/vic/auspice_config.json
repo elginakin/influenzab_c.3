@@ -1,0 +1,82 @@
+{
+  "title": "Influenza B/Vic evolution for Assessing C.3 Reassortment Rates",
+  "maintainers": [
+    {"name": "Elgin Akin", "url": "https://elginakin.github.io"}
+  ],
+  "data_provenance": [
+      {
+        "name": "The Mostafa Lab",
+        "url": "https://profiles.hopkinsmedicine.org/provider/Heba+Mabrouk+Mostafa/2777563"
+      },
+      {
+        "name": "GISAID"
+      }
+  ],
+  "build_url": "https://github.com/elginakin/influenzab_c.3",
+  "colorings":[
+    {
+      "key": "clade",
+      "title": "clade",
+      "type": "categorical"
+    },
+    {
+      "key": "subclade",
+      "title": "subclade", 
+      "type": "categorical"
+    },
+    {
+      "key": "region",
+      "title": "region", 
+      "type": "categorical"
+    },
+    {
+      "key": "country",
+      "title": "country", 
+      "type": "categorical"
+    },
+    {
+      "key": "division",
+      "title": "division", 
+      "type": "categorical"
+    },
+    {
+      "key": "location",
+      "title": "location", 
+      "type": "categorical"
+    },
+    {
+      "key": "sequencing_run",
+      "title": "sequencing run ID",
+      "type": "categorical"
+    },
+    {
+      "key": "qc.overallStatus",
+      "title": "qc.overallStatus",
+      "type": "categorical"
+    },
+    {
+      "key": "coverage",
+      "title": "coverage",
+      "type": "categorical"
+    }
+  ],
+  "display_defaults": {
+    "color_by": "subclade"
+  },
+  "filters": [
+    "clade",
+    "subclade",
+    "region",
+    "country",
+    "division",
+    "location",
+    "sequencing_run",
+    "qc.overallStatus"
+  ],
+   "panels": [
+    "tree",
+    "entropy",
+    "map",
+    "frequencies"
+  ]
+}
