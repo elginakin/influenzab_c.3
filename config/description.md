@@ -4,7 +4,7 @@
 
 ##### 4 Probable C.5.1 HA reassortments with a C.3 HA in NA, NP, NS and PA 
 
-Instructions(click on a link to view a ha tanglegram filtered to subclades C.3 and C.5.1 )
+Instructions: click on a link to view a ha tanglegram filtered to subclades C.3 and C.5.1
 
 - [HA:NA](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/na?f_subclade=C.3,C.5.1)
 - [HA:NP](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/np?f_subclade=C.3,C.5.1)

@@ -19,22 +19,23 @@ Critically, the `data/` directory houses 8 `sequence.fasta` and 8 `metadata.tsv`
 
 # Tanglegram Quick Links
 
-Instructions: Click on each link to visualize an HA:{segment} tanglegram in auspice.
+Instructions: Click on each link to visualize a HA:{segment} tanglegram in auspice.
 
 >![WARNING]
 > You must have access to the Pekosz Lab private nextstrain account. Contact Dr. Andy Pekosz apekosz1@ jh.edu and cc Elgin Akin (eakin1@jh.edu) for access 
 
-## 4 Probable C.5.1 HA reassortments with a C.3 HA in NA, NP, NS and PA 
+##### 4 Probable C.5.1 HA reassortments with a C.3 HA in NA, NP, NS and PA 
 
-- [HA:NA](nahttps://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/na)
-- [HA:NP](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/np)
-- [HA:NS](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/ns)
-- [HA:PA](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/pa)
+- [HA:NA](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/na?f_subclade=C.3,C.5.1)
+- [HA:NP](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/np?f_subclade=C.3,C.5.1)
+- [HA:NS](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/ns?f_subclade=C.3,C.5.1)
+- [HA:PA](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/pa?f_subclade=C.3,C.5.1)
 
-## 3 Non C.3 Reassortments
-- [HA:PB2](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/pb2)
-- [HA:PB1](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/pb1)
-- [HA:NA](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/mp)
+##### 3 Non C.3 Reassortments
+- [HA:PB2](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/pb2?f_subclade=C.3,C.5.1)
+- [HA:PB1](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/pb1?f_subclade=C.3,C.5.1)
+- [HA:MP](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/mp?f_subclade=C.3,C.5.1)
+
 
 ## Instructions to view non-HA:{segment} reassortments in Auspice/Nextstrain
 
