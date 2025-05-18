@@ -1,6 +1,12 @@
 # Influenza B Global Genome Builds with enriched C.3 isolates from GISAID
 
-This repository houses all source code 
+This repository houses all source code for the 8 segment and 1 genome [Nextstrain Build for Assessing C.3 Reassortment Rates](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha)
+
+> [!IMPORTANT]  
+> Repository Code of conduct for ALL collaborators using this repo:
+> 1. **DO NOT** push commits to main. Please open a [pull request](https://github.com/elginakin/influenzab_c.3/compare). 
+> 2. Please document any problems or issues you encounter by opening a [github issue](https://github.com/elginakin/influenzab_c.3/issues)
+
 
 > [!WARNING]  
 > This repository does NOT house the necessary data to construct the 9 IBV C.3-enriched nextstrain builds. These data are availible on a [private OneDrive](https://livejohnshopkins-my.sharepoint.com/:f:/r/personal/eakin1_jh_edu/Documents/01_Pekosz_Lab/01_Project_Notebooks/Project_5_2024-25_ibv_reassortment/03_repositories/nextstrain_snapshots?csf=1&web=1&e=tEbrf3). Contact Elgin Akin (eakin1@jh.edu) for access. 
@@ -41,7 +47,7 @@ Instructions: Click on each link to visualize a HA:{segment} tanglegram in auspi
 
 1. In your browswer, click the URL window and delete its contents.
 2. The formula for building a tanglegram in your browser is as follows: 
-    - https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/**segment**:groups/PekoszLab/akine/ibvc3/vic/**segment**
+    - `https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/**segment**:groups/PekoszLab/akine/ibvc3/vic/**segment**`
     - The segment must be in all lowercase. Options: pb2, pb1, pa, ha, np, na, mp, ns. 
 
 For example: a PB2:PA tanglegram can be build and visualized by entering the following URL into your browswer:
