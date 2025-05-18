@@ -1,12 +1,22 @@
+"""
+This script downloads all segments into 1 folder called data within the Treesort folder and repository.
+The headers for all sequences has been modified such that the collection date (or sequencing date) is 
+within the strain name in the following format: 
+
+- sample_ID|date
+- e.g. JH1234|2025-01-25
+
+"""
+
 import os
 import subprocess
 
 # Define the parameters
 db_path = "fludb.db"
-fasta_dir = "source/intermediate"
-metadata_dir = "data"
-headers = ["sample_ID"]
-header_delimiter = "_"  # Added header delimiter
+fasta_dir = "TreeSort/data/"
+metadata_dir = "TreeSort/data"
+headers = ["sample_ID","segment","date"]
+header_delimiter = "|"  # Added header delimiter
 raw_subtypes = ["Victoria"]  # Includes raw subtype patterns from flusort output.  # rm "H1xx", "xxN1", "H3xx", "xxN2"
 segments = ["ha","np", "na", "mp", "ns", "pb2", "pb1", "pa"]
 
@@ -35,14 +45,14 @@ for subtype in set(subtypes):  # Use `set` to avoid redundant processing
 
     for segment in segments:
         # Define the directory structure using lowercase values for directories
-        output_dir = f"{fasta_dir}/{dir_subtype}/{segment}"
+        output_dir = f"{fasta_dir}"
         
         # Ensure the directory exists
         os.makedirs(output_dir, exist_ok=True)
         
         # Construct the output file names
-        fasta_file = f"{output_dir}/sequences.fasta"
-        metadata_file = f"{output_dir}/metadata.tsv"
+        fasta_file = f"{output_dir}/{segment}_sequences.fasta"
+        metadata_file = f"{output_dir}/{segment}_metadata.tsv"
         
         # Construct the command with uppercase subtype for filtering
         cmd = [
@@ -59,7 +69,7 @@ for subtype in set(subtypes):  # Use `set` to avoid redundant processing
         ]
 
         # Print a concise message for logging purposes
-        print(f"Downloading data for {subtype} - {segment} segment...")
+        print(f"Downloading data formatted for TreeSort: {subtype} - {segment} segment...")
         
         # Execute the command
         try:

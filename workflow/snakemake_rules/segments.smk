@@ -93,7 +93,7 @@ rule merge_quality_metrics:
         nextclade_df = pd.read_csv(input.nextclade, sep='\t', usecols=['seqName', 'qc.overallScore', 'qc.overallStatus', 'coverage'])
 
         # Perform the merge operation, merging on the seqName
-        merged_df = pd.merge(metadata_df, nextclade_df, left_on='seqName', right_on='seqName', how='left')
+        merged_df = pd.merge(metadata_df, nextclade_df, left_on='sample_ID', right_on='seqName', how='left')
 
         # Rename the columns to remove the period
         merged_df.rename(columns={
@@ -102,12 +102,11 @@ rule merge_quality_metrics:
         }, inplace=True)
 
         # Drop the merge columns (seqName_x and seqName_y) if they exist
-        merged_df.drop(columns=['seqName_x', 'seqName_y'], inplace=True, errors='ignore')
+        merged_df.drop(columns=['seqName_x', 'seqName_y', 'seqName'], inplace=True, errors='ignore')
 
         # Save the merged dataframe to the output file
         merged_df.to_csv(output.metadata_merged, sep='\t', index=False)
 
-    
 rule augur_filter:
     input:
         sequences="data/{subtype}/{segment}/sequences.fasta",
@@ -125,7 +124,7 @@ rule augur_filter:
         augur filter \
             --sequences {input.sequences} \
             --metadata {input.metadata} \
-            --query "(coverage >= 0.9) & ((qc_overallStatus == 'good') | (qc_overallStatus == 'mediocre'))" \
+            --query "(coverage >= 0.9) & (qc_overallStatus == 'good')" \
             --min-length {params.min_length} \
             --exclude {params.exclude} \
             --metadata-id-columns sample_ID \
@@ -351,6 +350,8 @@ rule export:
             --tree {input.tree} \
             --metadata {input.metadata} \
             --description {input.description} \
+            --lat-longs config/lat_long.tsv \
+            --geo-resolutions region country division area \
             --node-data {params.node_data} \
             --metadata-id-columns sample_ID \
             --auspice-config {input.auspice_config} \

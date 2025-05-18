@@ -4,7 +4,7 @@ import pandas as pd
 from treetime.utils import numeric_date
 
 wildcard_constraints:
-    subtype = "h1n1|h3n2|vic",
+    subtype = "vic", # removed h3n2 and h1n1 
     segment = "pb2|pb1|pa|ha|np|na|mp|ns"
 
 # Define the mimimum length thresholds for each segment. This is a crude filtering which should be fine-tuned in the future depending on build results. 
@@ -23,17 +23,17 @@ rule all:
     input:
         # Individual segments
         expand("auspice/{subtype}/{segment}_tip-frequencies.json", 
-               subtype=["h3n2", "h1n1", "vic"], 
+               subtype=["vic"], 
                segment=["pb2", "pb1", "pa", "ha", "np", "na", "mp", "ns"]),
         expand("auspice/{subtype}/{segment}.json", 
-               subtype=["h3n2", "h1n1", "vic"], 
+               subtype=["vic"], 
                segment=["pb2", "pb1", "pa", "ha", "np", "na", "mp", "ns"]),
 
         # Genomes
         expand("auspice/{subtype}/genome_tip-frequencies.json", 
-               subtype=["h3n2", "h1n1", "vic"]),
+               subtype=["vic"]),
         expand("auspice/{subtype}/genome.json", 
-               subtype=["h3n2", "h1n1", "vic"])
+               subtype=["vic"])
 
 #include: "workflow/snakemake_rules/ingest.smk" # a manual ingetion step is described in the 01_ingest.qmd workbook. 
 

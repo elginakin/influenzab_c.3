@@ -1,10 +1,10 @@
 rule genome_clades:
-    message: "append nextclade calls to the genome"
+    message: "append nextclade clade calls to the genome"
     input:
-        metadata = "data/{subtype}/genome/metadata.tsv",
-        nextclade = "results/{subtype}/ha/nextclade.tsv"
+        metadata = "data/vic/genome/metadata.tsv",
+        nextclade = "results/vic/ha/nextclade.tsv"
     output:
-        clades = "results/{subtype}/genome/nextclade.tsv"
+        clades = "results/vic/genome/nextclade.tsv"
     shell:
         """
         csvtk -t join -f "sequence_ID;seqName" \
@@ -179,6 +179,7 @@ rule genome_export:
             --metadata {input.metadata} \
             --metadata-id-columns sample_ID \
             --description {input.description} \
+            --geo-resolutions region country division area \
             --node-data \
             {input.branch_lengths} \
             {input.traits} \

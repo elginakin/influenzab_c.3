@@ -58,10 +58,41 @@
       "key": "coverage",
       "title": "coverage",
       "type": "categorical"
+    },
+    { "key": "genome_qc.overallScore",
+      "title": "genome qc Score",
+      "type": "continuous"
+    },
+      {"key": "genome_qc.overallStatus",
+      "title": "genome qc Status",
+      "type": "categorical"
+    },
+    { "key": "ha_glycosylation",
+      "title": "ha_glycosylation",
+      "type": "categorical"
+    },
+    { "key": "na_glycosylation",
+      "title": "na glycosylation",
+      "type": "categorical"
+    },
+    { "key": "age",
+      "title": "age",
+      "type": "categorical"
+    },
+    { "key": "database_origin",
+      "title": "database origin",
+      "type": "categorical"
     }
   ],
+    "geo_resolutions": [
+    "division",
+    "country",
+    "region",
+    "location"
+  ],
   "display_defaults": {
-    "color_by": "subclade"
+    "color_by": "subclade",
+    "map_triplicate": true
   },
   "filters": [
     "clade",

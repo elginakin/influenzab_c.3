@@ -3,8 +3,8 @@ import os
 
 # Map of original subtype names to their desired lowercase equivalents
 subtype_map = {
-#    "H1N1": "h1n1",
-#    "H3N2": "h3n2",
+#    "H1N1": "h1n1", #not needed for this build
+#    "H3N2": "h3n2", # note needed for this build
     "Victoria": "vic"
 }
 
@@ -14,8 +14,8 @@ db_path = "fludb.db"
 # Loop through each subtype and execute the command
 for subtype, dir_name in subtype_map.items():
     # Define the output file paths
-    fasta_file = f"data/{dir_name}/genome/sequences.fasta"
-    metadata_file = f"data/{dir_name}/genome/metadata.tsv"
+    fasta_file = f"source/intermediate/{dir_name}/genome/sequences.fasta"
+    metadata_file = f"source/intermediate/{dir_name}/genome/metadata.tsv"
 
     # Create the output directories if they don't exist
     os.makedirs(os.path.dirname(fasta_file), exist_ok=True)

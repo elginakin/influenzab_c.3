@@ -1,0 +1,30 @@
+---
+title: "treesort reassortment inference"
+author: Elgin Akin 
+date: 2025-05-15
+format: html
+---
+
+# OPtions for reassortment inference 
+
+- treesort
+- treeknit
+- colre
+
+# TreeSort 
+- re-download fasta files for treesort - include a different name schema than for nextstrain builds `sample_ID|date`. modify fludb accession download scripts to incorperate segments and headers 
+
+## Prepare dataset with provided curation scripts
+```{shell}
+./prepare_dataset.sh --fast --segments "HA,NA" tutorial/swH1-dataset/swine_H1_HANA.fasta HA tutorial/swH1-parsed
+```
+
+## generate descriptor file
+
+## strain names need to have dates within the name...
+```{shell}
+treesort \
+    -i config/vic/treesort_descriptor.csv \
+    -o results/treesort/ibv-ha.annotated.tre \
+    -m mincut
+```

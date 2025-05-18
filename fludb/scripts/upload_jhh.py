@@ -39,7 +39,8 @@ def update_database(db_path, fasta_file, metadata_file, require_sequence):
 
     # Set default values for database origin and location
     database_origin = "mostafa_lab"
-    location = "JHH"
+    #location = "JHH"
+    location = "North America / United States / Maryland / Baltimore"
 
     # Load metadata and determine types dynamically for each sample
     metadata_df = pd.read_csv(metadata_file, sep='\t')

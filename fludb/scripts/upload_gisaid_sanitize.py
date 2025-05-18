@@ -1,16 +1,5 @@
-"""
-Fasta header requirement: Isolate ID | Isolate name  | Segment  | Type 
-    e.g. "EPI_ISL_19628330|B/South_Africa/7958/2024|NP|B"
-
-Metadata File Requirement: Unmodified metadata.xls from gisaid 
-
-This upload script sanitizes GISAID data at the following fields: 
-- Strain (sequence_ID): Removes spaces replacing " " with "" to match case.
-- Date: Formats all dates to YYYY-MM-DD - similar to augur curate
-
-"""
-
 import argparse
+import re
 from Bio import SeqIO
 import pandas as pd
 import sqlite3
@@ -28,10 +17,13 @@ def format_date(date_str):
     else:
         return None
 
-def sanitize_duplicates(conn): # buggy, true duplicates are still not removed
+def sanitize_sample_id(sample_id):
+    # Keep only alphanumerics, underscores, and slashes
+    return re.sub(r'[^\w/]', '', sample_id)
+
+def sanitize_duplicates(conn):
     cursor = conn.cursor()
     print("\U0001F9FC Sanitizing: removing duplicate sample_IDs from GISAID...")
-
     cursor.execute("""
         DELETE FROM influenza_genomes
         WHERE sequence_ID NOT IN (
@@ -44,7 +36,7 @@ def sanitize_duplicates(conn): # buggy, true duplicates are still not removed
     conn.commit()
     print("✅ Sanitization complete: duplicate sample_IDs removed.")
 
-def update_database(db_path, fasta_file, metadata_file, sanitize=False):
+def update_database(db_path, fasta_file, metadata_file, remove_duplicates=False, sanitize_names=False):
     segment_map = {
         "PB2": "pb2", "PB1": "pb1", "PA": "pa", "HA": "ha",
         "NP": "np", "NA": "na", "MP": "mp", "NS": "ns"
@@ -62,7 +54,7 @@ def update_database(db_path, fasta_file, metadata_file, sanitize=False):
 
     for record in SeqIO.parse(fasta_file, "fasta"):
         header = record.id
-        parts = [p.strip().replace(" ", "") for p in header.split("|")] # remove name spaces with 
+        parts = [p.strip().replace(" ", "") for p in header.split("|")]
         if len(parts) != 4:
             print(f"⚠️  Skipping malformed header: {header}")
             fasta_records_skipped += 1
@@ -75,6 +67,9 @@ def update_database(db_path, fasta_file, metadata_file, sanitize=False):
             fasta_records_skipped += 1
             continue
 
+        if sanitize_names:
+            sample_id = sanitize_sample_id(sample_id)  # Only sanitize sample_id here
+
         sequence = str(record.seq)
 
         try:
@@ -84,7 +79,7 @@ def update_database(db_path, fasta_file, metadata_file, sanitize=False):
                 ON CONFLICT(sequence_ID) DO UPDATE SET
                     {segment_name} = excluded.{segment_name},
                     database_origin = excluded.database_origin
-            ''', (isolate_id.replace(" ", ""), sample_id, sequence, database_origin))
+            ''', (isolate_id, sample_id, sequence, database_origin))
             fasta_records_inserted += 1
         except Exception as e:
             print(f"❌ Skipped record {header}: {e}")
@@ -98,8 +93,12 @@ def update_database(db_path, fasta_file, metadata_file, sanitize=False):
     metadata_df = pd.read_excel(metadata_file)
 
     for _, row in metadata_df.iterrows():
-        seq_id = str(row['Isolate_Id']).strip().replace(" ", "")
-        isolate_name = str(row.get('Isolate_Name', '')).strip().replace(" ", "") # remove spaces from strain name in metadata
+        seq_id = str(row['Isolate_Id']).strip().replace(" ", "")  # No sanitizing here
+        isolate_name = str(row.get('Isolate_Name', '')).strip().replace(" ", "")  # No sanitizing here
+
+        sample_id = str(row.get('Isolate_Name', '')).strip().replace(" ", "")
+        if sanitize_names:
+            sample_id = sanitize_sample_id(sample_id)  # Only sanitize sample_id
 
         subtype_column = str(row.get('Subtype', '')).strip()
         lineage_column = str(row.get('Lineage', '')).strip()
@@ -137,8 +136,8 @@ def update_database(db_path, fasta_file, metadata_file, sanitize=False):
                     age_unit = COALESCE(?, age_unit),
                     sex = COALESCE(?, sex)
             ''', (
-                seq_id, isolate_name, virus_type, subtype, collection_date, passage_history, location, database_origin, age, age_unit, sex,
-                isolate_name, virus_type, subtype, collection_date, passage_history, location, database_origin, age, age_unit, sex
+                seq_id, sample_id, virus_type, subtype, collection_date, passage_history, location, database_origin, age, age_unit, sex,
+                sample_id, virus_type, subtype, collection_date, passage_history, location, database_origin, age, age_unit, sex
             ))
             metadata_records_inserted += 1
         except Exception as e:
@@ -154,7 +153,7 @@ def update_database(db_path, fasta_file, metadata_file, sanitize=False):
     total_records = cursor.fetchone()[0]
     print(f"📦 Total records in the database: {total_records}")
 
-    if sanitize:
+    if remove_duplicates:
         sanitize_duplicates(conn)
 
     conn.close()
@@ -165,7 +164,17 @@ if __name__ == "__main__":
     parser.add_argument('-d', '--db', required=True, help='Path to the SQLite database file.')
     parser.add_argument('-f', '--fasta', required=True, help='Path to the GISAID FASTA file.')
     parser.add_argument('-m', '--metadata', required=True, help='Path to the GISAID metadata XLS file.')
-    parser.add_argument('-s', '--sanitize', action='store_true', help='Sanitize database by removing duplicate sample_IDs from GISAID after upload.')
+    parser.add_argument('--remove-duplicate-strains', action='store_true',
+                        help='Remove duplicate sample_IDs from GISAID after upload.')
+    parser.add_argument('--sanitize-names', action='store_true',
+                        help='Sanitize sample_ID only (not sequence_ID or isolate_name).')
 
     args = parser.parse_args()
-    update_database(args.db, args.fasta, args.metadata, sanitize=args.sanitize)
+
+    update_database(
+        db_path=args.db,
+        fasta_file=args.fasta,
+        metadata_file=args.metadata,
+        remove_duplicates=args.remove_duplicate_strains,
+        sanitize_names=args.sanitize_names
+    )

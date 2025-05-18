@@ -1,0 +1,8 @@
+﻿PB2,results/vic/pb2/aligned.fasta,results/vic/pb2/tree.nwk
+PB1,results/vic/pb1/aligned.fasta,results/vic/pb1/tree.nwk
+PA,results/vic/pa/aligned.fasta,results/vic/pa/tree.nwk
+*HA,results/vic/ha/aligned.fasta,results/vic/ha/tree.nwk
+NP,results/vic/np/aligned.fasta,results/vic/np/tree.nwk
+NA,results/vic/na/aligned.fasta,results/vic/na/tree.nwk
+MP,results/vic/mp/aligned.fasta,results/vic/mp/tree.nwk
+NS,results/vic/ns/aligned.fasta,results/vic/ns/tree.nwk

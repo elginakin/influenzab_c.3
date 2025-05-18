@@ -8,6 +8,9 @@ auspice/
 figures/
 logs/
 reports/
+documents/
+TreeSort
+dedup_strains.log
 
 # database files 
 *.db

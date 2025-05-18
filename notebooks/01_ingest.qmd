@@ -1,0 +1,251 @@
+---
+title: "GISAID Ingest Pipeline for C.3 Reassortment Analysis"
+author: Elgin Akin
+date: 05-10-2025
+format: html
+---
+
+The purpose of this data ingest pipeline to in take GISAID sequences and metadata files for santizing, de-duplicating and fomatting to input into a standard Nextstrain 8 segment and concatenated genome build pipeline.
+
+```{shell}
+conda activate flu
+```
+
+## Activate
+```{shell}
+#| eval: false
+python fludb/scripts/fludb_initiate.py
+```
+
+# Data Ingest 
+```{shell}
+# ibv victoria (vic)
+seqkit rmdup -n source/gisaid_vic_sequences.fasta > source/gisaid_vic_sequences.rmdup.fasta
+seqkit grep -s -r -i -p "^[ATCGatcg]+$" source/gisaid_vic_sequences.rmdup.fasta > source/gisaid_vic_sequences.rmdupn.noambig.fasta
+```
+
+## Upload CEIRR and GISAID sequences to fludb
+
+### Upload JH-CEIRR (Johns Hopkins Hospital - JHH formatted) sequences and metadata
+```{shell}
+#| eval: false
+python fludb/scripts/upload_jhh.py \
+    -d fludb.db \
+    -f source/flusort_JHH_sequences.fasta \
+    -m source/flusort_JHH_metadata.tsv \
+    --require-sequence
+```
+
+### Upload vaccines strains
+
+- [ ] Include B/Austria into `include.tsv`
+
+```{shell}
+#| eval: false
+python fludb/scripts/upload_vaccine.py \
+    -d fludb.db \
+    -f source/vaccine.fasta
+```
+
+### Upload all GISAID strains 
+
+```{shell}
+#python fludb/scripts/upload_gisaid.py \
+#    -d fludb.db \
+#    -f source/gisaid_vic_sequences.rmdupn.noambig.fasta \
+#    -m source/gisaid_vic_metadata.xls 
+```
+
+USE THIS SCRIPT _ TEST A SANITIZED VERSION LATER
+```{shell}
+python fludb/scripts/upload_gisaid_sanitize.py \
+    -d fludb.db \
+    -f source/gisaid_vic_sequences.rmdupn.noambig.fasta \
+    -m source/gisaid_vic_metadata.xls \
+    --sanitize-names \
+    --remove-duplicate-strains
+```
+
+
+### Download all complete influenza genomes
+
+```{shell}
+#| eval: false
+# downloads genomes
+python scripts/fludb_download_seasonal_build_genomes.py
+# download all 8 segments 
+python scripts/fludb_download_seasonal_build.py
+```
+
+# Run nextclade on all segments and extract clades, glycosylation and qc metrics 
+
+For each segment (pb2, pb1, pa, ha, np, na, mp, ns):
+
+1. Run Nextclade
+Generates nextclade.tsv from segment FASTA files using the appropriate Nextclade dataset.
+
+2. Extract Key Fields
+From each segment’s nextclade.tsv, extract:
+qc.overallScore, qc.overallStatus, coverage → renamed with segment prefix (e.g., pb2_qc.overallScore)
+For ha: also extract clade, subclade, and glycosylation
+For na: also extract glycosylation
+
+3. Merge Segment QC into a Genome Table
+Combines all segment-level QC and annotation into a single table.
+Computes:
+    genome_qc.overallScore → average of all segment scores
+    genome_qc.overallStatus → semicolon-delimited string of statuses (e.g., pb2:good;pa:bad;...)
+
+4. Update Metadata Files
+    Merges relevant QC fields into each segment’s and the genome’s metadata.tsv
+    Uses sample_ID (from metadata) matched to seqName (from Nextclade)
+    Saves enriched files as metadata_qc.tsv
+
+output: 
+- nextclade.tsv per segment
+- Merged genome_qc_summary.tsv
+- QC-enriched metadata_qc.tsv for each segment and genome
+
+```{shell}
+python scripts/nextclade_segment_qc.py
+```
+
+new output metadata for each segment is `metadata_qc.tsv`
+
+# Downsampling from the HA dataset (since now we have everything we need to downsample in the ha dataset)
+
+1. Expand the `location` column in HA metadata. - we'll focus on region and country.
+2. de-duplicate the metadata file by the sample_ID (this will automatically filter out any fasta entry not present in the metadata)
+3. de-duplicate the nextclade file by the sample_ID (this will automatically filter out any fasta entry not present in the metadata)
+4. Left join HA nextclade result file with fludb metadata file 
+5. Enrich C.3s by Downsample gisaid HA for C.3 sequences - obtain fasta headers 
+6. Downsample all non-C.3 gisaid isolates
+7. Extract all high genome quality JHH Isolates
+8. Final representative strains for each segment - ingest into data/ folder
+9. Drop Clade and Subclade columns for final filtering
+10. Loop through all segments and the genome dataset to extract curated + downsampled sequences
+
+
+## 1. Expand the `location` column in HA metadata. - we'll focus on region and country. 
+
+LOOP - Function to extract region, country, and division from an original location column
+
+```{shell}
+# we dont need the loop for now but wrote it just in case...
+python scripts/loop_format-location.py
+```
+
+resulting file is source/intermediate/vic/ha/metadata_qc_location.tsv
+
+
+## 2. de-duplicate the metadata file by the sample_ID (this will automatically filter out any fasta entry not present in the metadata)
+
+```{shell}
+python scripts/dedup.py \
+    -i source/intermediate/vic/ha/metadata_qc_location.tsv \
+    -o source/intermediate/vic/ha/metadata_qc_location_dedup.tsv \
+    -d logs/metadata_duplicates.tsv \
+    --drop-all-duplicates \
+    -c "sample_ID"
+```
+
+# 3. de-duplicate the nextclade file by the sample_ID (this will automatically filter out any fasta entry not present in the metadata)
+
+```{shell}
+python scripts/dedup.py \
+    -i source/intermediate/vic/ha/nextclade.tsv \
+    -o source/intermediate/vic/ha/nextclade_dedup.tsv \
+    -d logs/metadata_duplicates.tsv \
+    --drop-all-duplicates \
+    -c "seqName"
+```
+
+## 4. Left join HA nextclade result file with fludb metadata file 
+
+We'll now stick with just curating the HA sequence metadata 
+
+```{shell}
+csvtk -t join -f "sample_ID;seqName" \
+    source/intermediate/vic/ha/metadata_qc_location_dedup.tsv \
+    <(csvtk -t cut -f seqName,clade,subclade source/intermediate/vic/ha/nextclade_dedup.tsv) \
+    --left-join \
+    > source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv
+
+```
+
+## 5. Enrich C.3s by Downsample gisaid HA for C.3 sequences - obtain fasta headers 
+
+result: gisaid (non JHH) downsample of all C.3s with high quality genomes
+
+```{shell}
+augur filter \
+    --metadata source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv \
+    --sequences source/intermediate/vic/ha/sequences.fasta \
+    --metadata-id-columns "sample_ID" \
+    --exclude-where "area=Baltimore" \
+    --query '(subclade == "C.3") and (`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
+    --output-strains config/vic/include_c3.tsv
+```
+
+## 6. Down-select all non-C.3 gisaid isolates
+
+Also include all known C.3 HA:NA reassortments
+Vaccine strains
+```{shell}
+augur filter \
+    --metadata source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv \
+    --sequences source/intermediate/vic/ha/sequences.fasta \
+    --metadata-id-columns "sample_ID" \
+    --exclude-where "area=Baltimore" "subclade=C.3" \
+    --query '(`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
+    --group-by week country \
+    --subsample-max-sequences 2000 \
+    --subsample-seed 180 \
+    --output-strains config/vic/include_gisaid.tsv
+```
+
+## 7. Extract all high genome quality JHH Isolates
+
+```{shell}
+augur filter \
+    --metadata source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv \
+    --sequences source/intermediate/vic/ha/sequences.fasta \
+    --metadata-id-columns "sample_ID" \
+    --exclude-where "area!=Baltimore" \
+    --query '(`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
+    --output-strains config/vic/include_JHH.tsv
+```
+
+## 9. Drop Clade and Subclade columns for final filtering
+
+in: source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv
+out: source/intermediate/vic/ha/metadata_final.tsv
+
+```{shell}
+csvtk cut -t -f -clade,-subclade \
+    source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv \
+    > source/intermediate/vic/ha/metadata_final.tsv
+```
+
+## 10. Loop through all segments and the genome dataset to extract curated + downsampled sequences
+```{shell}
+python scripts/curate-segments.py
+```
+
+Note because we used subclade for downsample, all metadata files have clade and subclade thus we can remove it from the segments pipeline. 
+may need to 
+1. update nextclade datasets manually
+2. Remove clade assignment from either snakemake pipeline or the metadata (meatadata may be easier...)
+
+# Proceed with running the core seasonal pipeline 
+
+```{shell}
+snakemake --cores 8
+```
+
+Visualizing subclade richness in the following datasets:
+
+- JHH only 
+- GISAID total 
+- GISAID + JHH
+- final downsampled + C.3 enriched 
