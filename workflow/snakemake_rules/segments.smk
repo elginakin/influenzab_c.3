@@ -125,12 +125,13 @@ rule augur_filter:
             --sequences {input.sequences} \
             --metadata {input.metadata} \
             --query "(coverage >= 0.9) & (qc_overallStatus == 'good')" \
-            --min-length {params.min_length} \
             --exclude {params.exclude} \
             --metadata-id-columns sample_ID \
             --output-sequences {output.filtered_sequences} \
             --output-metadata {output.filtered_metadata} | tee {log}
         """
+
+# removed --min-length {params.min_length} \
 
 rule align:
     message:

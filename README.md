@@ -27,7 +27,7 @@ Critically, the `data/` directory houses 8 `sequence.fasta` and 8 `metadata.tsv`
 
 Instructions: Click on each link to visualize a HA:{segment} tanglegram in auspice.
 
->![WARNING]
+> !å[WARNING]
 > You must have access to the Pekosz Lab private nextstrain account. Contact Dr. Andy Pekosz apekosz1@ jh.edu and cc Elgin Akin (eakin1@jh.edu) for access 
 
 ##### 4 Probable C.5.1 HA reassortments with a C.3 HA in NA, NP, NS and PA 
