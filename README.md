@@ -13,7 +13,30 @@ This repository houses all source code for the 8 segment and 1 genome [Nextstrai
 
 This repository houses the nextstrain segment build and genome build snakemake pipeline. It functionally represents a typical [Pekosz Lab seasonal Influenza B nextstrain build](https://github.com/Pekosz-Lab/nextstrain) but replaces the [automated data ingest pipeline](https://github.com/Pekosz-Lab/nextstrain/blob/main/workflow/snakemake_rules/ingest.smk) with a **manual data ingest pipeline**. This pipeline can be found in the in the [01_ingest.qmd](notesbooks/01_ingest.qmd) notebook in order to accomodate sequences from GISAID. In the future, efforts will be made to automate the cleaning of publically sourced data.
 
-# How is this data organized 
+# How to execute this build
+
+1. Archive the current version of the repository. 
+    - This is important because the nextstrain pipeline will overwrite files in the `data/` and `source/intermediate/` directories.
+    - Make a new directory in the snapshots folder naming it according to the date of the new build YYYMMDD (e.g. 20250615)
+    - Copy the entire contents of your project into this new directory 
+        - a script has been written to accomplish this: execute `python scripts/snapshot.py -s . -o snapshots/{YYYYMMDD}` changing the date to the current date. 
+    - Once you have manually confirmed that the new directory is a complete copy of the project, you can safely delete the contents of the `data/`, `results`, and `source/intermediate/` directories using our safety-enhanced script:
+        - Run `python scripts/snapshot.py`.
+2. Download updated Influenza B Genomic data from [GISAID](https://www.gisaid.org/)
+    - Dates should be filtered to 2020-10-05 to the **Present Date**.
+    - Rename the sequences.fasta file to gisaid_vic_sequences.fasta
+    - Rename the metadata.tsv file to gisaid_vic_metadata.tsv
+    - Place these files in the `source/` directory of your project directory (this repository)
+3. Manually curate the sequences and metadata files using the [01_ingest.qmd](notesbooks/01_ingest.qmd) notebook.
+4. Execute the snakemake pipeline to build the 8 segment and 1 genome builds. 
+    - The snakemake pipeline is located in the `workflow/` directory of this repository. 
+    - The snakemake pipeline can be executed by running the following command in your terminal: 
+
+```{shell}
+snakemake --cores 8
+```
+
+# How are these data organized? 
 
 The [01_ingest.qmd](notesbooks/01_ingest.qmd) explains how sequences were down-selected and curated to result in a high quality genomes for 8 segment-specific builds in augur. 
 

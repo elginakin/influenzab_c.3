@@ -72,9 +72,9 @@ python fludb/scripts/upload_gisaid_sanitize.py \
 ```{shell}
 #| eval: false
 # downloads genomes
-python scripts/fludb_download_seasonal_build_genomes.py
+python scripts/fludb_download_genomes.py
 # download all 8 segments 
-python scripts/fludb_download_seasonal_build.py
+python scripts/fludb_download_segments.py
 ```
 
 # Run nextclade on all segments and extract clades, glycosylation and qc metrics 
@@ -125,7 +125,6 @@ new output metadata for each segment is `metadata_qc.tsv`
 9. Drop Clade and Subclade columns for final filtering
 10. Loop through all segments and the genome dataset to extract curated + downsampled sequences
 
-
 ## 1. Expand the `location` column in HA metadata. - we'll focus on region and country. 
 
 LOOP - Function to extract region, country, and division from an original location column
@@ -136,7 +135,6 @@ python scripts/loop_format-location.py
 ```
 
 resulting file is source/intermediate/vic/ha/metadata_qc_location.tsv
-
 
 ## 2. de-duplicate the metadata file by the sample_ID (this will automatically filter out any fasta entry not present in the metadata)
 
@@ -183,6 +181,7 @@ augur filter \
     --sequences source/intermediate/vic/ha/sequences.fasta \
     --metadata-id-columns "sample_ID" \
     --exclude-where "area=Baltimore" \
+    --exclude config/exclude.tsv \
     --query '(subclade == "C.3") and (`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
     --output-strains config/vic/include_c3.tsv
 ```
@@ -197,6 +196,7 @@ augur filter \
     --sequences source/intermediate/vic/ha/sequences.fasta \
     --metadata-id-columns "sample_ID" \
     --exclude-where "area=Baltimore" "subclade=C.3" \
+    --exclude config/exclude.tsv \
     --query '(`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
     --group-by week country \
     --subsample-max-sequences 2000 \
@@ -212,6 +212,7 @@ augur filter \
     --sequences source/intermediate/vic/ha/sequences.fasta \
     --metadata-id-columns "sample_ID" \
     --exclude-where "area!=Baltimore" \
+    --exclude config/exclude.tsv \
     --query '(`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
     --output-strains config/vic/include_JHH.tsv
 ```
@@ -236,6 +237,17 @@ Note because we used subclade for downsample, all metadata files have clade and 
 may need to 
 1. update nextclade datasets manually
 2. Remove clade assignment from either snakemake pipeline or the metadata (meatadata may be easier...)
+
+
+# Manual Inspection of data/ sequences
+
+```
+seqkit stats data/**/*.fasta 
+```
+
+```
+bioawk -c fastx '(length($seq) <  1000) { print ">"$name"\n"$seq }' data/vic/pb1/sequences.fasta
+```
 
 # Proceed with running the core seasonal pipeline 
 

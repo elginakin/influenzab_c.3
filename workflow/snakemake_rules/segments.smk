@@ -124,8 +124,7 @@ rule augur_filter:
         augur filter \
             --sequences {input.sequences} \
             --metadata {input.metadata} \
-            --query "(coverage >= 0.9) & (qc_overallStatus == 'good')" \
-            --exclude {params.exclude} \
+            --query "(qc_overallStatus == 'good')" \
             --metadata-id-columns sample_ID \
             --output-sequences {output.filtered_sequences} \
             --output-metadata {output.filtered_metadata} | tee {log}
@@ -233,9 +232,9 @@ rule refine:
     params:
         coalescent = "opt",
         date_inference = "marginal",
-        clock_filter_iqd = 4,
-        clock_rate = clock_rate,  # Function reference to calculate clock rate dynamically
-        clock_std_dev = clock_std_dev  # Function reference to calculate clock std dev dynamically
+        clock_filter_iqd = 4, # standard deviations from the clock expectation # removed from rule: --clock-filter-iqd {params.clock_filter_iqd} \
+        clock_rate = clock_rate,  
+        clock_std_dev = clock_std_dev  
     log:
         "logs/refine_{subtype}_{segment}.txt"
     shell:
@@ -252,20 +251,19 @@ rule refine:
             --coalescent {params.coalescent} \
             --date-confidence \
             --date-inference {params.date_inference} \
-            --clock-filter-iqd {params.clock_filter_iqd} \
             --clock-rate {params.clock_rate}  \
             --clock-std-dev {params.clock_std_dev} | tee {log}
         """
 
 rule annotate_traits:
-    message: "Annotating traits"
+    message: "Annotating traits"  
     input:
         tree = rules.refine.output.tree,
         metadata = rules.augur_filter.output.filtered_metadata,
     output:
         traits = "results/{subtype}/{segment}/traits.json"
     params:
-        columns=["clade", "subclade", "qc_overallStatus", "qc_overallScore", "coverage", "sequencing_run"]
+        columns=["clade", "subclade", "coverage", "sequencing_run"]
     log: 
         "logs/annotate_traits_{subtype}_{segment}.txt"
     shell:

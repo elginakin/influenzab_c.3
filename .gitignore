@@ -1,6 +1,11 @@
 # Specify the files that we would like to keep out of the Pekosz Lab Nextstrain repository
 
 # Sensitive Directories
+
+## the snapshots directory contains the COMPLETE directory history of the Nextstrain build. 
+snapshots/ 
+
+## data folders
 source/
 data/
 results/

@@ -1,3 +1,12 @@
+"""
+This script downloads concatenated genome sequences and metadata for specific influenza subtypes. 
+You need to specify the output file paths for the FASTA and metadata files,
+
+Here, we specify 
+
+
+"""
+
 import subprocess
 import os
 

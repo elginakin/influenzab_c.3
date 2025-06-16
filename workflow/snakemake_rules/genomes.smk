@@ -4,10 +4,10 @@ rule genome_clades:
         metadata = "data/vic/genome/metadata.tsv",
         nextclade = "results/vic/ha/nextclade.tsv"
     output:
-        clades = "results/vic/genome/nextclade.tsv"
+        clades = "results/vic/genome/metadata.tsv" 
     shell:
         """
-        csvtk -t join -f "sequence_ID;seqName" \
+        csvtk -t join -f "sample_ID;seqName" \
             {input.metadata} \
             {input.nextclade} \
             --left-join \

@@ -1,5 +1,5 @@
 {
-  "title": "Influenza B/Vic evolution for Assessing C.3 Reassortment Rates",
+  "title": "9 Influenza B/Vic Phylogenies for assessing C.3 reassortment rates",
   "maintainers": [
     {"name": "Elgin Akin", "url": "https://elginakin.github.io"}
   ],
@@ -68,11 +68,19 @@
       "type": "categorical"
     },
     { "key": "ha_glycosylation",
-      "title": "ha_glycosylation",
+      "title": "ha glycosylation",
       "type": "categorical"
     },
     { "key": "na_glycosylation",
       "title": "na glycosylation",
+      "type": "categorical"
+    },
+    { "key": "ha_total_nglycans",
+      "title": "ha total glycosylation",
+      "type": "categorical"
+    },
+    { "key": "na_total_nglycans",
+      "title": "na total glycosylation",
       "type": "categorical"
     },
     { "key": "age",
@@ -102,7 +110,9 @@
     "division",
     "location",
     "sequencing_run",
-    "qc.overallStatus"
+    "qc.overallStatus",
+    "ha_toal_nglycans",
+    "na_toal_nglycans"
   ],
    "panels": [
     "tree",

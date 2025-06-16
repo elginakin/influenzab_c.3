@@ -1,0 +1,32 @@
+---
+title: "Observational Case Frequencies"
+author: Elgin Akin
+date: 2025-06-15
+format: html
+---
+
+
+- use the `source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv` as the input data frame
+- de-duplicated by strain name
+- location column expanded to region / country / division / location
+    - will need to look at the number of missing rows within each category...
+
+
+# Figures 
+
+## Total Frequency Summarized by Month
+1. Global Frequency by Subclade
+2. North American Frequency by subclade
+3. Baltimore/JHH Frequency by Subclade
+4. D197E Glycosylation by Month 
+
+## Maps Global Distribution 
+
+1. C.3 distribution globally
+2. C.5.1 distribution globally
+3. C.5.6 distribution globally
+4. C.5.7 distribution globally
+
+
+
+
