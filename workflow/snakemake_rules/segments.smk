@@ -263,7 +263,7 @@ rule annotate_traits:
     output:
         traits = "results/{subtype}/{segment}/traits.json"
     params:
-        columns=["clade", "subclade", "coverage", "sequencing_run"]
+        columns=["clade", "subclade", "region", "country", "division"]
     log: 
         "logs/annotate_traits_{subtype}_{segment}.txt"
     shell:

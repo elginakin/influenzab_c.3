@@ -1,0 +1,236 @@
+---
+title: "age_frequency"
+author: Elgin Akin
+date: 2025-06-20
+format: html
+---
+
+```{r}
+
+#################################################
+# Function: Generates a density of age stratified by subclade
+# Author: Elgin Akin
+# Description: This script ingests tabular data with 2 column with 2 columns Age and Subtype
+#################################################
+
+# -------Simulate some JHH Age Data --------
+set.seed(123) 
+ages_C3 <- round(rnorm(50, mean = 15, sd = 10)) 
+ages_C3 <- pmax(pmin(ages_C3, 70), 0)
+ages_C5 <- round(rnorm(50, mean = 55, sd = 10)) 
+ages_C5 <- pmax(pmin(ages_C5, 70), 0) 
+
+# Create simulated data frame. 
+df <- data.frame(age = c(ages_C3, ages_C5),subclade = rep(c("C.3", "C.5"), each = 50))
+
+# ------- Uncomment to import ACTUAL age data  --------
+
+# df <- read.csv("age_data.csv") # uncomment this line to import the actual age dataframe
+
+#################################################
+
+# ------- Load packages -------- 
+packages <- c("ggpubr", "tidyverse", "gt")
+
+# Install any packages that are not already installed
+installed <- packages %in% rownames(installed.packages())
+if (any(!installed)) {
+  install.packages(packages[!installed])
+}
+
+# Load packages
+lapply(packages, library, character.only = TRUE)
+
+# ------- PLOT DENSITY PLOT -------- 
+# Density plot with mean lines and marginal rug
+
+density <- ggdensity(df,
+                      x = "age", 
+                      add = "median", 
+                      rug = TRUE,
+                      color = "subclade", 
+                      fill = "subclade",
+                      legend = "right",
+                      palette = c("#2E6F40", "#FF6961"))
+
+# ------- PLOT VIOLIN PLOT -------- 
+
+violin <- ggviolin(df, 
+                  x = "subclade",
+                  y = "age",
+                  fill = "subclade",
+                  width = 0.5,
+                  legend = "right",
+                  add = "median_iqr",
+                  error.plot = c("crossbar"),
+                  palette = c("#2E6F40", "#FF6961")) +
+                  stat_kruskal_test(aes(group = subclade), label = "p = {p.format}{p.signif}")
+
+# ------- PLOT BOXPLOT --------  
+boxplot <- ggboxplot(df, 
+                    x = "subclade",
+                    y = "age",
+                    width = 0.4,
+                    fill = "subclade", 
+                    legend = "right",
+                    palette = c("#2E6F40", "#FF6961")) +
+                    stat_kruskal_test(aes(group = subclade), label = "p = {p.format}{p.signif}")
+
+# ------- PLOT SUMMARY STATS PLOT -----
+summarystats <- ggsummarystats(df,
+                                x = "subclade",
+                                y = "age",
+                                ggfunc = ggbarplot, 
+                                width = 0.4,
+                                summaries = c("n", "mean", "median", "iqr"),
+                                add = c("jitter", "median_iqr"),
+                                color = "subclade", 
+                                palette = c("#2E6F40", "#FF6961"))
+
+
+# ------- Calculate Mean, Median and quartile ranges --------
+
+res <- desc_statby(df, measure.var = "age",
+   grps = c("subclade")) 
+
+# Select and pivot relevant statistics
+res_pivot <- res |>
+  select(subclade, length, min, max, median,iqr, mean, sd) |>
+  pivot_longer(
+    cols = -subclade,
+    names_to = "statistic",
+    values_to = "value"
+  ) |>
+  pivot_wider(
+    names_from = subclade,
+    values_from = value
+  )
+
+# Pretty table with gt
+statistics <- res_pivot |>
+              gt() |>
+              tab_spanner(
+                label = "Subclade",
+                columns = c(C.3, C.5)
+              ) |> 
+              fmt_number(
+                columns = where(is.numeric),
+                decimals = 2
+              ) |>
+              cols_label(
+                statistic = "Statistic",
+                `C.3` = "C.3",
+                `C.5` = "C.5"
+              ) |> 
+              gtsave("figures/statistics.docx") # save statistics plot
+
+# ------- SAVE DENSITY PLOT -------- 
+# you'll need to make a figures/directory if you have not already. 
+
+ggsave("figures/age_density.jpeg", density, height = 3, width = 4)
+ggsave("figures/age_violinplot.jpeg", violin, height = 3, width = 3)
+ggsave("figures/age_boxplot.jpeg", boxplot, height = 3, width = 3)
+ggexport(summarystats, filename = "figures/statistics.png", height = 800, width = 800, res = 200)
+
+# ------- VIEW PLOTS -------- 
+
+density
+violin
+boxplot
+summarystats
+
+
+```
+
+
+## Goodness of fit
+
+
+```{r}
+# ---- NORMALITY TESTS (Shapiro-Wilk) ----
+shapiro_C3 <- shapiro.test(df$age[df$subclade == "C.3"])
+shapiro_C5 <- shapiro.test(df$age[df$subclade == "C.5"])
+
+cat("Shapiro-Wilk test for C.3:\n")
+print(shapiro_C3)
+
+cat("\nShapiro-Wilk test for C.5:\n")
+print(shapiro_C5)
+
+# ---- HISTOGRAM + NORMAL CURVE OVERLAY ----
+plot_normal_overlay <- function(data, label, color) {
+  ggplot(data, aes(x = age)) +
+    geom_histogram(aes(y = ..density..), bins = 10, fill = color, alpha = 0.5) +
+    stat_function(fun = dnorm,
+                  args = list(mean = mean(data$age), sd = sd(data$age)),
+                  color = "black", size = 1.2) +
+    labs(title = paste("Histogram with Normal Curve:", label),
+         x = "Age", y = "Density") +
+    theme_minimal()
+}
+
+hist_C3 <- plot_normal_overlay(df[df$subclade == "C.3", ], "C.3", "#2E6F40")
+hist_C5 <- plot_normal_overlay(df[df$subclade == "C.5", ], "C.5", "#FF6961")
+
+# ---- Q-Q PLOTS ----
+qq_C3 <- ggqqplot(df[df$subclade == "C.3", ]$age,
+                  color = "#2E6F40", title = "Q-Q Plot: C.3")
+
+qq_C5 <- ggqqplot(df[df$subclade == "C.5", ]$age,
+                  color = "#FF6961", title = "Q-Q Plot: C.5")
+
+# ---- DISPLAY ALL PLOTS ----
+library(patchwork)
+(hist_C3 | qq_C3) / (hist_C5 | qq_C5)
+
+```
+
+
+
+```{r}
+# Run Shapiro-Wilk normality tests
+shapiro_C3 <- shapiro.test(df$age[df$subclade == "C.3"])
+shapiro_C5 <- shapiro.test(df$age[df$subclade == "C.5"])
+
+# Create a new row with Shapiro-Wilk p-values
+normality_row <- tibble(
+  statistic = "Shapiro-Wilk p-value",
+  `C.3` = shapiro_C3$p.value,
+  `C.5` = shapiro_C5$p.value
+)
+
+
+# Original summary
+res_pivot <- res |>
+  select(subclade, length, min, max, median, iqr, mean, sd) |>
+  pivot_longer(
+    cols = -subclade,
+    names_to = "statistic",
+    values_to = "value"
+  ) |>
+  pivot_wider(
+    names_from = subclade,
+    values_from = value
+  )
+
+# Append normality test row
+res_with_normality <- bind_rows(res_pivot, normality_row)
+
+statistics <- res_with_normality |>
+  gt() |>
+  tab_spanner(
+    label = "Subclade",
+    columns = c(`C.3`, `C.5`)
+  ) |>
+  fmt_number(
+    columns = where(is.numeric),
+    decimals = 4
+  ) |>
+  cols_label(
+    statistic = "Statistic",
+    `C.3` = "C.3",
+    `C.5` = "C.5"
+  ) 
+
+
+```

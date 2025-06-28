@@ -65,7 +65,6 @@ Instructions: Click on each link to visualize a HA:{segment} tanglegram in auspi
 - [HA:PB1](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/pb1?f_subclade=C.3,C.5.1)
 - [HA:MP](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha:groups/PekoszLab/akine/ibvc3/vic/mp?f_subclade=C.3,C.5.1)
 
-
 ## Instructions to view non-HA:{segment} reassortments in Auspice/Nextstrain
 
 1. In your browswer, click the URL window and delete its contents.

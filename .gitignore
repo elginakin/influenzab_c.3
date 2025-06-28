@@ -6,6 +6,7 @@
 snapshots/ 
 
 ## data folders
+beast2/*.fasta
 source/
 data/
 results/

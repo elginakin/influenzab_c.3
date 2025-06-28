@@ -14,17 +14,437 @@ format: html
 # TreeSort 
 - re-download fasta files for treesort - include a different name schema than for nextstrain builds `sample_ID|date`. modify fludb accession download scripts to incorperate segments and headers 
 
-## Prepare dataset with provided curation scripts
+
+## Rename Treetips to include dates
+
 ```{shell}
-./prepare_dataset.sh --fast --segments "HA,NA" tutorial/swH1-dataset/swine_H1_HANA.fasta HA tutorial/swH1-parsed
+python scripts/date_tree_tips.py \
+    -t results/vic/ha/tree_raw.nwk \
+    -m results/vic/ha/filtered.tsv \
+    -f results/vic/ha/aligned.fasta \
+    -O TreeSort/data/ha_tree_raw.aln \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/ha_tree_raw.nwk | tee -a logs/tipdates.out
+
+python scripts/date_tree_tips.py \
+    -t results/vic/na/tree_raw.nwk \
+    -m results/vic/na/filtered.tsv \
+    -f results/vic/na/aligned.fasta \
+    -O TreeSort/data/na_tree_raw.aln \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/na_tree_raw.nwk | tee -a logs/tipdates.out
+
+python scripts/date_tree_tips.py \
+    -t results/vic/pb2/tree_raw.nwk \
+    -m results/vic/pb2/filtered.tsv \
+    -f results/vic/pb2/aligned.fasta \
+    -O TreeSort/data/pb2_tree_raw.aln \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/pb2_tree_raw.nwk | tee -a logs/tipdates.out
+
+python scripts/date_tree_tips.py \
+    -t results/vic/pb1/tree_raw.nwk \
+    -m results/vic/pb1/filtered.tsv \
+    -f results/vic/pb1/aligned.fasta \
+    -O TreeSort/data/pb1_tree_raw.aln \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/pb1_tree_raw.nwk | tee -a logs/tipdates.out
+
+python scripts/date_tree_tips.py \
+    -t results/vic/pa/tree_raw.nwk \
+    -m results/vic/pa/filtered.tsv \
+    -f results/vic/pa/aligned.fasta \
+    -O TreeSort/data/pa_tree_raw.aln \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/pa_tree_raw.nwk | tee -a logs/tipdates.out
+
+python scripts/date_tree_tips.py \
+    -t results/vic/np/tree_raw.nwk \
+    -m results/vic/np/filtered.tsv \
+    -f results/vic/np/aligned.fasta \
+    -O TreeSort/data/np_tree_raw.aln \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/np_tree_raw.nwk | tee -a logs/tipdates.out
+
+python scripts/date_tree_tips.py \
+    -t results/vic/mp/tree_raw.nwk \
+    -m results/vic/mp/filtered.tsv \
+    -f results/vic/mp/aligned.fasta \
+    -O TreeSort/data/mp_tree_raw.aln \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/mp_tree_raw.nwk | tee -a logs/tipdates.out
+
+python scripts/date_tree_tips.py \
+    -t results/vic/ns/tree_raw.nwk \
+    -m results/vic/ns/filtered.tsv \
+    -f results/vic/ns/aligned.fasta \
+    -O TreeSort/data/ns_tree_raw.aln \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/ns_tree_raw.nwk | tee -a logs/tipdates.out
+
 ```
+
 
 ## generate descriptor file
 
+Done manually
+
+## root ha tree ?
+yes required 
+```{shell}
+python TreeSort/treetime-root.py TreeSort/data/ha_tree_raw.nwk TreeSort/data/ha_tree_raw.aln
+python TreeSort/treetime-root.py TreeSort/data/na_tree_raw.nwk TreeSort/data/na_tree_raw.aln
+python TreeSort/treetime-root.py TreeSort/data/pb2_tree_raw.nwk TreeSort/data/pb2_tree_raw.aln
+python TreeSort/treetime-root.py TreeSort/data/pb1_tree_raw.nwk TreeSort/data/pb1_tree_raw.aln
+python TreeSort/treetime-root.py TreeSort/data/pa_tree_raw.nwk TreeSort/data/pa_tree_raw.aln
+python TreeSort/treetime-root.py TreeSort/data/np_tree_raw.nwk TreeSort/data/np_tree_raw.aln
+python TreeSort/treetime-root.py TreeSort/data/mp_tree_raw.nwk TreeSort/data/mp_tree_raw.aln
+python TreeSort/treetime-root.py TreeSort/data/ns_tree_raw.nwk TreeSort/data/ns_tree_raw.aln
+```
+
+## check tree and fasta congruency
+
+```{shell}
+python scripts/check_tree_fasta_congruency.py \
+  -t TreeSort/data/ha_tree_raw.nwk \
+  -f TreeSort/data/ha_tree_raw.aln \
+  -o TreeSort/data/ha_tree_fasta_congruency.tsv
+```
+
 ## strain names need to have dates within the name...
+
 ```{shell}
 treesort \
-    -i config/vic/treesort_descriptor.csv \
-    -o results/treesort/ibv-ha.annotated.tre \
-    -m mincut
+    -i TreeSort/data/descriptor_hana.csv \
+    -o TreeSort/results/ibv_hana_annotated.tre \
+    --clades TreeSort/results/ibv_hana_clades.txt \
+    --pvalue
 ```
+
+```{shell}
+treesort \
+    -i TreeSort/data/descriptor.csv \
+    -o results/treesort/ibv_ha_annotated.tre \
+    --clades results/treesort/clades.txt
+```
+
+## okay lets try to use the augur refined tree (should be rooted) as input.
+Not able to find the reassortment event...
+```{shell}
+python scripts/date_tree_tips.py \
+    -t results/vic/ha/tree.nwk \
+    -m results/vic/ha/filtered.tsv \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/ha_tree.nwk | tee -a logs/tipdates.out
+
+python scripts/date_tree_tips.py \
+    -t results/vic/na/tree.nwk \
+    -m results/vic/na/filtered.tsv \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/na_tree.nwk | tee -a logs/tipdates.out
+
+python scripts/date_tree_tips.py \
+    -t results/vic/pb2/tree.nwk \
+    -m results/vic/pb2/filtered.tsv \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/pb2_tree.nwk | tee -a logs/tipdates.out
+
+python scripts/date_tree_tips.py \
+    -t results/vic/pb1/tree.nwk \
+    -m results/vic/pb1/filtered.tsv \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/pb1_tree.nwk | tee -a logs/tipdates.out
+
+python scripts/date_tree_tips.py \
+    -t results/vic/pa/tree.nwk \
+    -m results/vic/pa/filtered.tsv \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/pa_tree.nwk | tee -a logs/tipdates.out
+
+python scripts/date_tree_tips.py \
+    -t results/vic/np/tree.nwk \
+    -m results/vic/np/filtered.tsv \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/np_tree.nwk | tee -a logs/tipdates.out
+
+python scripts/date_tree_tips.py \
+    -t results/vic/mp/tree.nwk \
+    -m results/vic/mp/filtered.tsv \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/mp_tree.nwk | tee -a logs/tipdates.out
+
+python scripts/date_tree_tips.py \
+    -t results/vic/ns/tree.nwk \
+    -m results/vic/ns/filtered.tsv \
+    --strain-column "sample_ID" \
+    --date-column "date" \
+    --verbosity 2 \
+    -o TreeSort/data/ns_tree.nwk | tee -a logs/tipdates.out
+```
+
+update descriptor with augur refine renamed tip trees 
+```{shell}
+treesort \
+    -i TreeSort/data/descriptor.csv \
+    -o TreeSort/results/ibv_hana_annotated.tre \
+    --clades TreeSort/results/ibv_hana_clades.txt
+```
+
+## try adjusting p val and switch back to the non-refined branch trees
+
+```{shell}
+treesort \
+    -i TreeSort/data/descriptor_hana.csv \
+    -o TreeSort/results/ibv_testpval_annotated.tre \
+    --pvalue 0.01 \
+    --clades TreeSort/results/ibv_testpval.clades
+```
+
+
+
+# Attempting CoalRe 
+
+https://taming-the-beast.org/tutorials/Reassortment-Tutorial/#:~:text=Download%20CoalRe,and%20download%20the%20CoalRe%20package%20.&text=After%20the%20package%20is%20installed%2C%20re%2Dstart%20BEAUti.
+
+# Estimating Nucleotide Diversities from Alignments 
+
+Its possible that the slow mutation rate of the NS segment has complicated ancestry prediction. 
+- Calulate pi for each segment alignment 
+- calculate root-to-tip regression for each segment and plot...
+
+
+## root-to-tip regression
+
+
+Root to tip regressions were calculated using treetime called through TreeSort's included [treetime-root.py](TreeSort/treetime-root.py)
+
+### Plot calcualted rtts for 8 segments
+```{r}
+plot_rtt_regression <- function(data, gene_name) {
+  # Fit linear model
+  model <- lm(`root-to-tip distance` ~ date, data = data)
+  
+  # Extract values
+  intercept <- coef(model)[1]
+  slope <- coef(model)[2]
+  slope_se <- summary(model)$coefficients["date", "Std. Error"]
+  r_squared <- summary(model)$r.squared
+  root_date <- -intercept / slope
+
+  # 95% CI
+  ci <- confint(model)["date", ]
+  slope_ci_str <- paste0(signif(slope, 2))
+  #slope_ci_str <- paste0(signif(slope, 2), " [", signif(ci[1], 2), ", ", signif(ci[2], 2), "]")
+  
+  # Generate plot
+  p <- ggplot(data, aes(x = date, y = `root-to-tip distance`)) +
+    geom_point(alpha = 0.6, size = 1.8) +
+    geom_smooth(method = "lm", se = TRUE, color = '#2C3E50') +
+    annotate("text",
+         x = max(data$date),
+         y = min(data$`root-to-tip distance`),
+         hjust = 1,
+         label = paste0("y = α + βt\n",
+                        "β = ", slope_ci_str, "\n",
+                        "R² = ", signif(r_squared, 3), "\n",
+                        "root date: ", round(root_date, 2)),
+         size = 4) +
+    labs(title = paste("Root-to-tip regression:", gene_name),
+         x = "Date",
+         y = "Root-to-tip distance") +
+    theme_minimal()
+  
+  return(p)
+}
+
+
+# Extract slope and CI from an RTT dataset
+extract_slope_ci <- function(data, gene_name) {
+  model <- lm(`root-to-tip distance` ~ date, data = data)
+  slope <- coef(model)["date"]
+  ci <- confint(model)["date", ]
+  tibble(
+    gene = gene_name,
+    slope = slope,
+    ci_lower = ci[1],
+    ci_upper = ci[2]
+  )
+}
+
+# Plot bar plot of slopes with error bars
+plot_all_slopes <- function(results_df) {
+  results_df <- results_df |> 
+    arrange(desc(slope)) |> 
+    mutate(gene = factor(gene, levels = gene))  # Preserve order in plot
+
+  ggplot(results_df, aes(x = gene, y = slope)) +
+    geom_col(fill = "steelblue", alpha = 0.8) +
+    geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2) +
+    labs(
+      title = "Estimated substitution rate (β) with 95% CI",
+      x = "Segment",
+      y = "Slope β"
+    ) +
+    theme_minimal(base_size = 14)
+}
+
+```
+
+
+```{r}
+
+library(tidyverse)
+
+rtt_pb2 = read_csv("Treesort/data/treetime_root/pb2_tree_raw.aln.treetime/rtt.csv", skip = 1) |> 
+    filter(!str_detect(name, "NODE"))
+rtt_pb1 = read_csv("Treesort/data/treetime_root/pb1_tree_raw.aln.treetime/rtt.csv", skip = 1) |> 
+    filter(!str_detect(name, "NODE"))
+rtt_pa = read_csv("Treesort/data/treetime_root/pa_tree_raw.aln.treetime/rtt.csv", skip = 1) |> 
+    filter(!str_detect(name, "NODE"))
+rtt_ha = read_csv("Treesort/data/treetime_root/ha_tree_raw.aln.treetime/rtt.csv", skip = 1) |> 
+    filter(!str_detect(name, "NODE"))
+rtt_np = read_csv("Treesort/data/treetime_root/np_tree_raw.aln.treetime/rtt.csv", skip = 1) |> 
+    filter(!str_detect(name, "NODE"))
+rtt_na = read_csv("Treesort/data/treetime_root/na_tree_raw.aln.treetime/rtt.csv", skip = 1) |> 
+    filter(!str_detect(name, "NODE"))
+rtt_mp = read_csv("Treesort/data/treetime_root/mp_tree_raw.aln.treetime/rtt.csv", skip = 1) |> 
+    filter(!str_detect(name, "NODE"))
+rtt_ns = read_csv("Treesort/data/treetime_root/ns_tree_raw.aln.treetime/rtt.csv", skip = 1) |> 
+    filter(!str_detect(name, "NODE"))
+
+p_pb2 <- plot_rtt_regression(rtt_pb2, "PB2")
+p_pb1 <- plot_rtt_regression(rtt_pb1, "PB1")
+p_pa  <- plot_rtt_regression(rtt_pa,  "PA")
+p_ha  <- plot_rtt_regression(rtt_ha,  "HA")
+p_np  <- plot_rtt_regression(rtt_np,  "NP")
+p_na  <- plot_rtt_regression(rtt_np,  "NA")
+p_mp  <- plot_rtt_regression(rtt_na,  "MP")
+p_ns  <- plot_rtt_regression(rtt_ns,  "NS")
+
+library(patchwork)
+
+(p_ha | p_na) /
+(p_pb2  | p_pb1  | p_pa) /
+(p_np | p_mp | p_ns)
+
+```
+
+
+
+
+
+```{r}
+# Helper to read RTT files
+read_rtt_data <- function(path) {
+  read_csv(path, skip = 1) |> filter(!str_detect(name, "NODE"))
+}
+
+# Collect results
+slope_results <- bind_rows(
+  extract_slope_ci(read_rtt_data("Treesort/data/treetime_root/pb2_tree_raw.aln.treetime/rtt.csv"), "PB2"),
+  extract_slope_ci(read_rtt_data("Treesort/data/treetime_root/pb1_tree_raw.aln.treetime/rtt.csv"), "PB1"),
+  extract_slope_ci(read_rtt_data("Treesort/data/treetime_root/pa_tree_raw.aln.treetime/rtt.csv"),  "PA"),
+  extract_slope_ci(read_rtt_data("Treesort/data/treetime_root/ha_tree_raw.aln.treetime/rtt.csv"),  "HA"),
+  extract_slope_ci(read_rtt_data("Treesort/data/treetime_root/np_tree_raw.aln.treetime/rtt.csv"),  "NP"),
+  extract_slope_ci(read_rtt_data("Treesort/data/treetime_root/na_tree_raw.aln.treetime/rtt.csv"),  "NA"),
+  extract_slope_ci(read_rtt_data("Treesort/data/treetime_root/ns_tree_raw.aln.treetime/rtt.csv"),  "NS")
+)
+
+# Plot summary of all slopes
+plot_all_slopes(slope_results)
+
+```
+
+
+# try fancier
+
+```{r}
+plot_rtt_regression <- function(data, gene_name, label_position = "top-left") {
+  # Fit linear model
+  model <- lm(`root-to-tip distance` ~ date, data = data)
+  
+  # Extract values
+  intercept <- coef(model)[1]
+  slope <- coef(model)[2]
+  slope_se <- summary(model)$coefficients["date", "Std. Error"]
+  r_squared <- summary(model)$r.squared
+  root_date <- -intercept / slope
+  ci <- confint(model)["date", ]
+  slope_ci_str <- paste0(signif(slope, 2))
+
+  # Create label text
+  label_text <- paste0("y = α + βt\n",
+                       "β = ", slope_ci_str, "\n",
+                       "R² = ", signif(r_squared, 3), "\n",
+                       "root date: ", round(root_date, 2))
+
+  # Define label position
+  x_pos <- if (label_position == "top-left") min(data$date) else max(data$date)
+  y_pos <- if (label_position == "top-left") max(data$`root-to-tip distance`) else min(data$`root-to-tip distance`)
+  h_just <- if (label_position == "top-left") 0 else 1
+
+  # Create plot
+  p <- ggplot(data, aes(x = date, y = `root-to-tip distance`)) +
+    geom_point(alpha = 0.6, size = 1.8) +
+    geom_smooth(method = "lm", se = TRUE, color = '#2C3E50') +
+    geom_label(
+      aes(x = x_pos, y = y_pos, label = label_text),
+      hjust = h_just,
+      vjust = if (label_position == "top-left") 1 else 0,
+      fill = alpha("white", 0.75),
+      color = "black",
+      label.size = 0.4,
+      size = 4,
+      inherit.aes = FALSE
+    ) +
+    labs(
+      title = paste("Root-to-tip regression:", gene_name),
+      x = "Date",
+      y = "Root-to-tip distance"
+    ) +
+    theme_minimal()
+  
+  return(p)
+}
+
+
+plot_rtt_regression(rtt_pb2, "HA", label_position = "top-left")
+
+```
+
+## pi 
+
+```
+
+```
+

@@ -1,0 +1,357 @@
+---
+title: "Observational Case Frequencies"
+author: Elgin Akin
+date: 2025-06-15
+format: html
+---
+
+
+- use the `source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv` as the input data frame
+- de-duplicated by strain name
+- location column expanded to region / country / division / location
+    - will need to look at the number of missing rows within each category...
+
+
+# Figures 
+
+## Total Frequency Summarized by Month
+1. Global Frequency by Subclade
+2. North American Frequency by subclade
+3. Baltimore/JHH Frequency by Subclade
+4. D197E Glycosylation by Month 
+
+## Maps Global Distribution 
+
+1. C.3 distribution globally
+2. C.5.1 distribution globally
+3. C.5.6 distribution globally
+4. C.5.7 distribution globally
+
+
+# Config
+
+```{r}
+subclade_colors <- c("C.5.1" = "#d95f02", 
+                     "C.5.5" = "#66c2a5", 
+                     "C.5.6" = "#051334",
+                     "C.5.7" = "#666666",
+                     "C.5" = "#e6ab02", 
+                     "C.3" = "#00A7E1")
+
+subclade_colors <- c("C.5.7" = "#666666",
+                      "C.5.6" = "#051334",
+                      "C.5.5" = "#66c2a5",
+                      "C.5.4" = "#575482",
+                      "C.5.3" = "#7570b3",
+                      "C.5.2" = "#9893E1",
+                      "C.5.1" = "#d95f02",
+                      "C.5" = "#623C74", 
+                      "C.4" = "#E4B19B",
+                      "C.3" = "#00A7E1",
+                      "C.2" = "#F2CACA",
+                      "C.1" = "#F8CFCF",
+                      "C" = "#FFE2D8",
+                      "A" = "#F9DC5C",
+                      "A.3.2" = "#FAE588",
+                      "A.3.1.1" = "#FCEFB4",
+                      "A.3" = "#FDF4CB")
+
+#Other pallettes: 
+ # - https://loading.io/color/feature/DragonBall-%E3%83%89%E3%83%A9%E3%82%B4%E3%83%B3%E3%83%9C%E3%83%BC%E3%83%AB
+
+#Dark2
+#1b9e77
+#d95f02
+#7570b3
+#e7298a
+#66a61e
+#e6ab02
+#a6761d
+#666666
+
+```
+
+
+## Case Counts
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(lubridate)
+
+flu_data <- read_tsv("data/case_counts_2425.txt")
+
+# Convert date column to Date type
+flu_data$date_range <- as.Date(flu_data$date_range, format = "%Y-%m-%d")
+
+
+# Reshape data to long format
+flu_long <- flu_data %>%
+  pivot_longer(cols = c(IAV_clinic, IBV_clinic), names_to = "Virus", values_to = "Case Count") %>%
+  mutate(Virus = recode(Virus,
+                        "IAV_clinic" = "Influenza A",
+                        "IBV_clinic" = "Influenza B"))
+
+                
+# Filter to only show dates between October 2023 and April 2024
+filtered_flu <- flu_long %>% filter(date_range >= as.Date("2024-10-02") & date_range <= as.Date("2025-12-31"))
+
+# fill 2019-2024 df 
+# summarized
+filtered_fliu_monthly_dates <- seq(floor_date(min(filtered_flu$date_range), "month"),
+                     floor_date(max(filtered_flu$date_range), "month"),
+                     by = "month")
+
+case_count = filtered_flu |>
+  ggplot(aes(date_range, `Case Count`, color = Virus)) + 
+  geom_smooth(se = FALSE, linewidth = 1.2) + 
+  scale_x_date(date_labels = "%b\n%y",date_breaks = "1 month", expand = expansion(mult = c(0.05, 0.1))) +
+  scale_color_manual(values = c("Influenza A" = "black", "Influenza B" = "red")) +
+  labs(y = "Case Count", x = "Case Date", color = "Virus") +
+  theme_classic(base_size = 16, base_family = "Helvetica") +
+  theme(
+    legend.position = "top",
+    axis.title = element_text(size = 18, face = "bold"),
+    axis.text = element_text(size = 16),
+    legend.text = element_text(size = 15),
+    legend.title = element_text(size = 15)
+  )
+
+case_count
+
+ggsave('figures/case_count.png', case_count, height = 6, width = 6)
+```
+
+## Total Frequency Summarized by Month
+
+```{r}
+library(tidyverse)
+library(ggstream)
+library(plotly)
+library(patchwork)
+
+# import nextclade data 
+nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv") |>
+  mutate(date = if_else(str_detect(date, "2025-..-..") & !str_detect(date, "2025-\\d{2}-\\d{2}"),
+                        "2025-01-01", date),
+         date = as.Date(date))
+
+#filter out vaccine strain
+nextclade_filt = nextclade |> 
+  filter(date >= as.Date("2022-01-01") & date <= as.Date("2025-12-31")) |>
+  filter(database_origin == "mostafa_lab") 
+  
+# Count occurrences of each subclade per date
+frequency <-  nextclade_filt |> 
+  count(date, subclade) |>
+  ungroup()
+
+# Generate sequence of dates representing each week
+weekly_dates <- seq(min(frequency$date), max(frequency$date), by = "week")
+
+monthly_dates <- seq(floor_date(min(frequency$date), "month"),
+                     floor_date(max(frequency$date), "month"),
+                     by = "month")
+
+# Create the base plot
+p1 = frequency |> 
+  ggplot(aes(date, n, fill=subclade), color = "black") + 
+  scale_fill_manual(values = c(subclade_colors, "gray")) +
+  theme_classic()
+
+ridge = p1 +
+  geom_stream(sorting = "inside_out", bw = 1.2, type = "proportional", color = "black",) +
+  #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
+  scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
+  theme(legend.position = "top",
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 15),  # Increase legend text size
+        legend.title = element_text(size = 15)) +  # Increase legend title size
+  labs(y="Proportion", x="Sequencing Date")
+
+ggsave('figures/jhh_frequency_proportional.png', ridge, height = 6, width = 6)
+ggsave('figures/jhh_supplemental_frequency_proportiona.png', ridge, height = 4, width = 8)
+
+ridge
+```
+
+### filter only to north america
+
+```{r}
+library(tidyverse)
+library(ggstream)
+library(plotly)
+library(patchwork)
+
+
+# import nextclade data 
+nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv") |>
+  mutate(date = if_else(str_detect(date, "2025-..-..") & !str_detect(date, "2025-\\d{2}-\\d{2}"),
+                        "2025-01-01", date),
+         date = as.Date(date))
+
+#filter out vaccine strain
+nextclade_filt <- nextclade |> 
+  filter(
+    date >= as.Date("2023-10-01") & date <= as.Date("2025-12-31"),
+    database_origin != "mostafa_lab",
+    country == "United States"
+  )
+  
+# Count occurrences of each subclade per date
+frequency <-  nextclade_filt |> 
+  count(date, subclade) |>
+  ungroup()
+
+frequency <- nextclade_filt |>
+  filter(!is.na(subclade), !is.na(date)) |>
+  mutate(month = floor_date(date, unit = "month")) |>
+  count(month, subclade) |>
+  rename(date = month) |>
+  ungroup()
+
+# Generate sequence of dates representing each week
+weekly_dates <- seq(min(frequency$date), max(frequency$date), by = "week")
+
+monthly_dates <- seq(floor_date(min(frequency$date), "month"),
+                     floor_date(max(frequency$date), "month"),
+                     by = "month")
+
+# Create the base plot
+p1 = frequency |> 
+  ggplot(aes(date, n, fill=subclade), color = "black") + 
+  scale_fill_manual(values = c(subclade_colors, "gray")) +
+  theme_classic()
+
+ridge = p1 +
+  geom_stream(sorting = "inside_out", bw = 0.7, type = "proportional", color = "black",) +
+  #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
+  scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
+  theme(legend.position = "top",
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 15),  # Increase legend text size
+        legend.title = element_text(size = 15)) +  # Increase legend title size
+  labs(y="Proportion", x="Sequencing Date")
+
+ggsave('figures/NHfrequency_ridgeline.png', ridge, height = 4, width = 8)
+
+ridge
+```
+
+
+## Global 
+```{r}
+library(tidyverse)
+library(ggstream)
+library(plotly)
+library(patchwork)
+
+# import nextclade data 
+nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv") |>
+  mutate(date = if_else(str_detect(date, "2025-..-..") & !str_detect(date, "2025-\\d{2}-\\d{2}"),
+                        "2025-01-01", date),
+         date = as.Date(date))
+
+#filter out vaccine strain
+nextclade_filt <- nextclade |> 
+  filter(
+    date >= as.Date("2023-10-01") & date <= as.Date("2025-12-31"),
+    database_origin != "mostafa_lab"
+  )
+  
+# Count occurrences of each subclade per date
+frequency <-  nextclade_filt |> 
+  count(date, subclade) |>
+  ungroup()
+
+frequency <- nextclade_filt |>
+  filter(!is.na(subclade), !is.na(date)) |>
+  mutate(month = floor_date(date, unit = "month")) |>
+  count(month, subclade) |>
+  rename(date = month) |>
+  ungroup()
+
+# Generate sequence of dates representing each week
+weekly_dates <- seq(min(frequency$date), max(frequency$date), by = "week")
+
+monthly_dates <- seq(floor_date(min(frequency$date), "month"),
+                     floor_date(max(frequency$date), "month"),
+                     by = "month")
+
+# Create the base plot
+p1 = frequency |> 
+  ggplot(aes(date, n, fill=subclade), color = "black") + 
+  scale_fill_manual(values = c(subclade_colors, "gray")) +
+  theme_classic()
+
+ridge = p1 +
+  geom_stream(sorting = "inside_out", bw = 0.7, type = "proportional", color = "black",) +
+  #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
+  scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
+  theme(legend.position = "top",
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 15),  # Increase legend text size
+        legend.title = element_text(size = 15)) +  # Increase legend title size
+  labs(y="Proportion", x="Sequencing Date")
+
+ggsave('figures/global_frequency_ridgeline.png', ridge, height = 4, width = 8)
+
+ridge
+```
+
+
+# Aggregated subclade table
+
+```{r}
+library(tidyverse)
+library(gt)
+
+nextclade_filt_table <- nextclade |> 
+  filter(
+    date >= as.Date("2024-10-01") & date <= as.Date("2025-12-31")
+  )
+
+# Filter and summarize
+subclade_summary <- nextclade_filt_table |> 
+  filter(!is.na(subclade)) |> 
+  mutate(location_group = case_when(
+    division == "Maryland" ~ "Maryland",
+    country == "United States" ~ "United States",
+    TRUE ~ NA_character_
+  )) |> 
+  filter(!is.na(location_group)) |> 
+  count(location_group, subclade) |> 
+  pivot_wider(names_from = location_group, values_from = n, values_fill = 0) |> 
+  mutate(
+    `Maryland Percent` = Maryland / sum(Maryland) * 100,
+    `United States Percent` = `United States` / sum(`United States`) * 100
+  ) |> 
+  arrange(desc(`United States`)) |> 
+  rename(
+    `Subclade` = subclade,
+    `Maryland Count` = Maryland,
+    `United States Count` = `United States`
+  )
+
+# Format with gt
+subclade_summary |> 
+  gt() |> 
+  fmt_number(columns = c(`Maryland Percent`, `United States Percent`), decimals = 1) |> 
+  cols_label(
+    `Subclade` = "Subclade",
+    `Maryland Count` = "C Maryland Count",
+    `Maryland Percent` = "Maryland Percent",
+    `United States Count` = "North America Count",
+    `United States Percent` = "North America Percent"
+  ) |> 
+  tab_header(
+    title = "IBV Subclade Sequence Submissions\nin Maryland vs North America"
+  )
+
+```

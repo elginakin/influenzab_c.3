@@ -1,0 +1,138 @@
+
+---
+title: "age_frequency"
+author: Elgin and David
+date: 2025-06-20
+format: html
+---
+
+```{r}
+
+#################################################
+# Function: Generates a density of age stratified by subclade
+# Author: Elgin Akin
+# Description: This script ingests tabular data with 2 column with 2 columns Age and Subtype
+#################################################
+# ------- Uncomment to import ACTUAL age data  --------
+
+# df <- read.csv("Rstudio_C.3_paper.csv") # uncomment this line to import the actual age dataframe
+
+#################################################
+
+# ------- Load packages -------- 
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+packages <- c("ggpubr", "tidyverse", "gt")
+
+# Install any packages that are not already installed
+installed <- packages %in% rownames(installed.packages())
+if (any(!installed)) {
+  install.packages(packages[!installed])
+}
+
+# Load packages
+lapply(packages, library, character.only = TRUE)
+
+# ------- Set output directories --------
+output_dir <- "./"
+figures_dir <- file.path(output_dir, "figures")
+
+# Create folder if it doesn't exist
+if (!dir.exists(figures_dir)) {
+  dir.create(figures_dir, recursive = TRUE)
+}
+
+# ------- PLOT DENSITY PLOT -------- 
+# Density plot with mean lines and marginal rug
+
+density <- ggdensity(df,
+                    x = "age", 
+                    add = "median", 
+                    rug = TRUE,
+                    color = "subclade", 
+                    fill = "subclade",
+                    legend = "right",
+                    palette = c("#2E6F40", "#FF6961", "#6A994E", "#E07A5F", "#BC6C25"))
+
+# ------- PLOT VIOLIN PLOT -------- 
+
+violin <- ggviolin(df, 
+                  x = "subclade",
+                  y = "age",
+                  fill = "subclade",
+                  width = 0.5,
+                  legend = "right",
+                  add = "median_iqr",
+                  error.plot = c("crossbar"),
+                  palette = c("#2E6F40", "#FF6961", "#6A994E", "#E07A5F", "#BC6C25")) +
+                  stat_kruskal_test(aes(group = subclade), label = "p = {p.format}{p.signif}")
+
+# ------- PLOT BOXPLOT --------  
+boxplot <- ggboxplot(df, 
+                    x = "subclade",
+                    y = "age",
+                    width = 0.4,
+                    fill = "subclade", 
+                    legend = "right",
+                    palette = c("#2E6F40", "#FF6961", "#6A994E", "#E07A5F", "#BC6C25")) +
+                    stat_kruskal_test(aes(group = subclade), label = "p = {p.format}{p.signif}")
+
+# ------- PLOT SUMMARY STATS PLOT -----
+summarystats <- ggsummarystats(df,
+                              x = "subclade",
+                              y = "age",
+                              ggfunc = ggbarplot, 
+                              width = 0.4,
+                              summaries = c("n", "mean", "median", "iqr"),
+                              add = c("jitter", "median_iqr"),
+                              color = "subclade", 
+                              palette = c("#2E6F40", "#FF6961", "#6A994E", "#E07A5F", "#BC6C25"))
+
+# ------- Calculate Mean, Median and quartile ranges --------
+
+res <- desc_statby(df, measure.var = "age",
+                   grps = c("subclade")) 
+
+# Select and pivot relevant statistics
+res_pivot <- res |>
+  select(subclade, length, min, max, median, iqr, mean, sd) |>
+  pivot_longer(
+    cols = -subclade,
+    names_to = "statistic",
+    values_to = "value"
+  ) |>
+  pivot_wider(
+    names_from = subclade,
+    values_from = value
+  )
+
+# Pretty table with gt
+statistics <- res_pivot |>
+  gt() |>
+  tab_spanner(
+    label = "Subclade",
+    columns = c(C.3, C.5)
+  ) |> 
+  fmt_number(
+    columns = where(is.numeric),
+    decimals = 2
+  ) |>
+  cols_label(
+    statistic = "Statistic",
+    `C.3` = "C.3",
+    `C.5` = "C.5"
+  ) 
+
+# Save gt table as docx
+#gtsave(statistics, filename = file.path(figures_dir, "statistics.docx"))
+
+# ------- Print plots to show in HTML output --------
+print(density)
+print(violin)
+print(boxplot)
+print(summarystats)
+
+# ------- SAVE PLOTS TO DISK -------- 
+ggsave(file.path(figures_dir, "age_density.jpeg"), density, height = 3, width = 4)
+ggsave(file.path(figures_dir, "age_violinplot.jpeg"), violin, height = 3, width = 3)
+ggsave(file.path(figures_dir, "age_boxplot.jpeg"), boxplot, height = 3, width = 3)
+ggexport(summarystats, filename = file.path(figures_dir, "statistics.png"), height = 800, width = 800, res = 200)

@@ -1,0 +1,21 @@
+---
+title: "report"
+authorr: "Elgin Akin
+date: 2025-04-29
+format: pdf
+---
+
+
+
+join nextstrain report with ha coverage
+
+```{r}
+library(tidyverse)
+
+ha_nextclade = read_tsv("source/20250429_IV25Run15_nextstrain_snapshot/nextstrain/results/vic/ha/nextclade.tsv")
+nextstrain_report = read_tsv("source/20250429_IV25Run15_nextstrain_snapshot/nextstrain/reports/report.tsv")
+
+df = left_join(nextstrain_report, ha_nextclade, by = c("sequence_ID" = "seqName")) |> 
+    filter(type == "InfluenzaB")
+
+```
