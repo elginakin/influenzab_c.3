@@ -6,7 +6,7 @@ format: html
 ---
 
 
-- use the `source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv` as the input data frame
+- use the `source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv` as the input data frame
 - de-duplicated by strain name
 - location column expanded to region / country / division / location
     - will need to look at the number of missing rows within each category...
@@ -122,10 +122,96 @@ case_count = filtered_flu |>
 
 case_count
 
-ggsave('figures/case_count.png', case_count, height = 6, width = 6)
+ggsave('figures/case_count.png', case_count, height = 5, width = 5)
+
+## save 
+
+
+
+
 ```
 
-## Total Frequency Summarized by Month
+
+## Table of clinical cases by Month 
+```{r}
+library(tidyverse)
+library(gt)
+
+# Raw data
+clinic_counts <- tibble(
+  date_range = as.Date(c(
+    "2024-10-01", "2024-11-01", "2024-12-01",
+    "2025-01-01", "2025-02-01", "2025-03-01", "2025-04-01"
+  )),
+  IAV_clinic = c(2, 57, 510, 1988, 2229, 526, 53),
+  IBV_clinic = c(0, 4, 12, 41, 65, 372, 400)
+) |>
+  mutate(
+    Total = IAV_clinic + IBV_clinic,
+    `IAV Percent` = IAV_clinic / Total * 100,
+    `IBV Percent` = IBV_clinic / Total * 100
+  ) |>
+  rename(
+    `Date` = date_range,
+    `IAV Count` = IAV_clinic,
+    `IBV Count` = IBV_clinic
+  )
+
+# Add grand total row
+clinic_counts_totals <- clinic_counts |>
+  summarise(
+    Date = as.Date(NA),
+    `IAV Count` = sum(`IAV Count`),
+    `IBV Count` = sum(`IBV Count`),
+    Total = sum(Total),
+    `IAV Percent` = `IAV Count` / Total * 100,
+    `IBV Percent` = `IBV Count` / Total * 100
+  ) |>
+  mutate(Date = as.Date("9999-12-31"))  # use dummy future date for sorting
+
+# Bind totals row
+final_table <- bind_rows(clinic_counts, clinic_counts_totals) |>
+  arrange(Date) |>
+  mutate(Date = if_else(Date == as.Date("9999-12-31"), as.Date(NA), Date))
+
+# Format with gt
+table_clinical_frequency = final_table |>
+                                gt() |>
+                                fmt_number(columns = c(`IAV Percent`, `IBV Percent`), decimals = 1) |>
+                                #fmt_date(columns = "Date", date_style = "long") |>
+                                fmt_date(columns = "Date", date_style = "yMMM") |>
+                                cols_label(
+                                  Date = "Date",
+                                  `IAV Count` = "IAV Count",
+                                  `IBV Count` = "IBV Count",
+                                  Total = "Total Cases",
+                                  `IAV Percent` = "IAV %",
+                                  `IBV Percent` = "IBV %"
+                                ) |>
+                                tab_header(
+                                  title = "Clinic-Detected Influenza Cases by Month",
+                                  subtitle = "With Total IAV and IBV Counts"
+                                ) |>
+                                tab_style(
+                                  style = cell_text(weight = "bold"),
+                                  locations = cells_body(
+                                    rows = is.na(Date)
+                                  )
+                                ) |>
+                                text_transform(
+                                  locations = cells_body(columns = "Date", rows = is.na(Date)),
+                                  fn = function(x) "TOTAL"
+                                )
+
+table_clinical_frequency |> 
+  gtsave("figures/table_clinic_frequency.docx")
+
+table_clinical_frequency |> 
+  gtsave("figures/table_clinic_frequency.pdf")
+
+```
+
+## Total Subclade Frequency Summarized by Month in JHH
 
 ```{r}
 library(tidyverse)
@@ -134,7 +220,7 @@ library(plotly)
 library(patchwork)
 
 # import nextclade data 
-nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv") |>
+nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv") |>
   mutate(date = if_else(str_detect(date, "2025-..-..") & !str_detect(date, "2025-\\d{2}-\\d{2}"),
                         "2025-01-01", date),
          date = as.Date(date))
@@ -142,8 +228,8 @@ nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_de
 #filter out vaccine strain
 nextclade_filt = nextclade |> 
   filter(date >= as.Date("2022-01-01") & date <= as.Date("2025-12-31")) |>
-  filter(database_origin == "mostafa_lab") 
-  
+  filter(database_origin == "mostafa_lab")
+
 # Count occurrences of each subclade per date
 frequency <-  nextclade_filt |> 
   count(date, subclade) |>
@@ -156,13 +242,24 @@ monthly_dates <- seq(floor_date(min(frequency$date), "month"),
                      floor_date(max(frequency$date), "month"),
                      by = "month")
 
-# Create the base plot
+# Create the base plot for subclade frequency
 p1 = frequency |> 
   ggplot(aes(date, n, fill=subclade), color = "black") + 
   scale_fill_manual(values = c(subclade_colors, "gray")) +
   theme_classic()
 
 ridge = p1 +
+  geom_stream(sorting = "inside_out", bw = 1.2, type = "ridge", color = "black",) +
+  #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
+  scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
+  theme(legend.position = "top",
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 15),  # Increase legend text size
+        legend.title = element_text(size = 15)) +  # Increase legend title size
+  labs(y="Sequence count", x="Sequencing Date")
+
+proportional = p1 +
   geom_stream(sorting = "inside_out", bw = 1.2, type = "proportional", color = "black",) +
   #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
   scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
@@ -173,10 +270,16 @@ ridge = p1 +
         legend.title = element_text(size = 15)) +  # Increase legend title size
   labs(y="Proportion", x="Sequencing Date")
 
-ggsave('figures/jhh_frequency_proportional.png', ridge, height = 6, width = 6)
-ggsave('figures/jhh_supplemental_frequency_proportiona.png', ridge, height = 4, width = 8)
+# Create the base plot for glycosylation frequency
+
+p2 = 
+
+ggsave('figures/jhh_frequency_ridge.png', ridge, height = 5, width = 5)
+ggsave('figures/jhh_supplemental_frequency_ridge.png', ridge, height = 4, width = 8)
+ggsave('figures/jhh_supplemental_frequency_proportional.png', proportional, height = 4, width = 8)
 
 ridge
+proportional
 ```
 
 ### filter only to north america
@@ -189,7 +292,7 @@ library(patchwork)
 
 
 # import nextclade data 
-nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv") |>
+nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv") |>
   mutate(date = if_else(str_detect(date, "2025-..-..") & !str_detect(date, "2025-\\d{2}-\\d{2}"),
                         "2025-01-01", date),
          date = as.Date(date))
@@ -228,7 +331,18 @@ p1 = frequency |>
   theme_classic()
 
 ridge = p1 +
-  geom_stream(sorting = "inside_out", bw = 0.7, type = "proportional", color = "black",) +
+  geom_stream(sorting = "inside_out", bw = 1.2, type = "ridge", color = "black",) +
+  #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
+  scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
+  theme(legend.position = "top",
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 15),  # Increase legend text size
+        legend.title = element_text(size = 15)) +  # Increase legend title size
+  labs(y="Sequence count", x="Sequencing Date")
+
+proportional = p1 +
+  geom_stream(sorting = "inside_out", bw = 1.2, type = "proportional", color = "black",) +
   #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
   scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
   theme(legend.position = "top",
@@ -239,8 +353,10 @@ ridge = p1 +
   labs(y="Proportion", x="Sequencing Date")
 
 ggsave('figures/NHfrequency_ridgeline.png', ridge, height = 4, width = 8)
+ggsave('figures/NHfrequency_proportional.png', proportional, height = 4, width = 8)
 
 ridge
+proportional
 ```
 
 
@@ -252,7 +368,7 @@ library(plotly)
 library(patchwork)
 
 # import nextclade data 
-nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv") |>
+nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv") |>
   mutate(date = if_else(str_detect(date, "2025-..-..") & !str_detect(date, "2025-\\d{2}-\\d{2}"),
                         "2025-01-01", date),
          date = as.Date(date))
@@ -290,7 +406,18 @@ p1 = frequency |>
   theme_classic()
 
 ridge = p1 +
-  geom_stream(sorting = "inside_out", bw = 0.7, type = "proportional", color = "black",) +
+  geom_stream(sorting = "inside_out", bw = 1.2, type = "ridge", color = "black") +
+  #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
+  scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
+  theme(legend.position = "top",
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 15),  # Increase legend text size
+        legend.title = element_text(size = 15)) +  # Increase legend title size
+  labs(y="Sequence count", x="Sequencing Date")
+
+proportional = p1 +
+  geom_stream(sorting = "inside_out", bw = 1.2, type = "proportional", color = "black") +
   #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
   scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
   theme(legend.position = "top",
@@ -300,14 +427,135 @@ ridge = p1 +
         legend.title = element_text(size = 15)) +  # Increase legend title size
   labs(y="Proportion", x="Sequencing Date")
 
-ggsave('figures/global_frequency_ridgeline.png', ridge, height = 4, width = 8)
+ggsave('figures/frequency_global_ridgeline.png', ridge, height = 4, width = 8)
+ggsave('figures/frequency_global_proportional.png', proportional, height = 4, width = 8)
 
 ridge
+proportional
 ```
 
 
-# Aggregated subclade table
 
+# Quantify N-linked glycosylation observation frequency
+
+Use [quantify_hana_glycans.py](scripts/quantify_hana_glycans.py)
+
+```{shell}
+python scripts/quantify_hana_glycans.py \
+  -i source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv \
+  -o source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv \
+  -ha ha_glycosylation \
+  -na na_glycosylation
+```
+
+```{r}
+library(tidyverse)
+library(lubridate)
+
+
+glycan_colors <- c(
+    "EET" = "#72874EFF", 
+    "NET" = "#FF746C"
+)
+
+library(tidyverse)
+library(lubridate)
+
+# Load data
+nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv") |>
+  mutate(
+    date = if_else(
+      str_detect(date, "2025-..-..") & !str_detect(date, "2025-\\d{2}-\\d{2}"),
+      "2025-01-01", date
+    ),
+    date = as.Date(date)
+  )
+
+# Filter to relevant entries
+nextclade_filt <- nextclade |> 
+  filter(date >= as.Date("2022-01-01") & date <= as.Date("2025-12-31")) |> 
+  filter(database_origin == "mostafa_lab") |> 
+  mutate(ha_total_nglycans = as.numeric(ha_total_nglycans)) |> 
+  filter(ha_total_nglycans >= 10) |> 
+  drop_na(ha_total_nglycans, na_total_nglycans, subclade) |> 
+  mutate(
+    week = floor_date(date, "week"),
+    ha_glycan_cat = case_when(
+      ha_total_nglycans == 10 ~ "EET", 
+      ha_total_nglycans == 11 ~ "NET",
+      TRUE ~ as.character(ha_total_nglycans)  # fallback, just in case
+    ),
+    na_glycan_cat = as.character(na_total_nglycans)
+  )
+
+# Check if unwanted values remain
+unique(nextclade_filt$ha_glycan_cat)
+
+ha_glycan_freq <- nextclade_filt |> 
+  count(week, ha_glycan_cat) |> 
+  group_by(week) |> 
+  mutate(freq = n / sum(n)) |> 
+  ungroup()
+
+# Ridge plot
+p_ha_ridge <- ha_glycan_freq |> 
+  ggplot(aes(x = week, y = n, fill = ha_glycan_cat)) +
+  geom_stream(sorting = "inside_out", bw = 1.2, type = "ridge", color = "black") +
+  scale_fill_manual(values = glycan_colors, name = "Site 197-199") +
+  labs(x = "Sequencing Date", y = "Sequence count") +
+  scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
+  theme_classic() +
+  theme(legend.position = "top",
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 15),  # Increase legend text size
+        legend.title = element_text(size = 15))  # Increase legend title size
+
+# Proportional plot
+p_ha_proportion <- ha_glycan_freq |>
+  ggplot(aes(x = week, y = n, fill = ha_glycan_cat)) +
+  geom_stream(sorting = "onset", bw = 1.2, type = "proportional", color = "black") +
+  scale_fill_manual(values = glycan_colors, name = "Site 197-199") +
+  labs(x = "Sequencing Date", y = "proportion") +
+  scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +
+  theme_classic() +  #
+  theme(legend.position = "top",
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 15),  # Increase legend text size
+        legend.title = element_text(size = 15))   # Increase legend title size
+
+p_ha_ridge
+p_ha_proportion
+
+ggsave('figures/frequency_197_global_ridgeline.png', p_ha_ridge, height = 5, width = 5)
+ggsave('figures/frequency_197_global_proportional.png', p_ha_proportion, height = 5, width = 5)
+ggsave('figures/frequency_197_global_ridgeline-supp.png', p_ha_ridge, height = 4, width = 8)
+ggsave('figures/frequency_197_global_proportional-supp.png', p_ha_proportion, height = 4, width = 8)
+
+
+# try geom density
+# Ridge plot
+
+
+p_ha_ridge2 <- ha_glycan_freq |> 
+  ggplot(aes(x = week, y = n, fill = ha_glycan_cat)) +
+  #geom_stream(sorting = "inside_out", bw = 1.2, type = "ridge", color = "black") +
+  geom_area() +
+  scale_fill_manual(values = glycan_colors, name = "HA Glycans") +
+  labs(x = "Date", y = "Sequence count", title = "HA Glycosylation Count Over Time") +
+  theme_classic() +
+  theme(axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        legend.position = "top")
+
+
+
+```
+
+
+
+# Aggregated subclade table
 ```{r}
 library(tidyverse)
 library(gt)
@@ -322,7 +570,7 @@ subclade_summary <- nextclade_filt_table |>
   filter(!is.na(subclade)) |> 
   mutate(location_group = case_when(
     division == "Maryland" ~ "Maryland",
-    country == "United States" ~ "United States",
+    region == "North America" ~ "North America",
     TRUE ~ NA_character_
   )) |> 
   filter(!is.na(location_group)) |> 
@@ -330,28 +578,74 @@ subclade_summary <- nextclade_filt_table |>
   pivot_wider(names_from = location_group, values_from = n, values_fill = 0) |> 
   mutate(
     `Maryland Percent` = Maryland / sum(Maryland) * 100,
-    `United States Percent` = `United States` / sum(`United States`) * 100
+    `North America Percent` = `North America` / sum(`North America`) * 100
   ) |> 
-  arrange(desc(`United States`)) |> 
+  arrange(desc(`North America`)) |> 
   rename(
     `Subclade` = subclade,
     `Maryland Count` = Maryland,
-    `United States Count` = `United States`
+    `North America Count` = `North America`
   )
 
 # Format with gt
 subclade_summary |> 
   gt() |> 
-  fmt_number(columns = c(`Maryland Percent`, `United States Percent`), decimals = 1) |> 
+  fmt_number(columns = c(`North America Count`, `North America Percent`), decimals = 1) |> 
   cols_label(
     `Subclade` = "Subclade",
-    `Maryland Count` = "C Maryland Count",
+    `Maryland Count` = "Maryland Count",
     `Maryland Percent` = "Maryland Percent",
-    `United States Count` = "North America Count",
-    `United States Percent` = "North America Percent"
+    `North America Count` = "North America Count",
+    `North America Percent` = "North America Percent"
   ) |> 
   tab_header(
     title = "IBV Subclade Sequence Submissions\nin Maryland vs North America"
   )
 
+table_subclade = subclade_summary |> 
+  gt() |> 
+  fmt_number(
+    columns = c(`North America Count`, `Maryland Count`),
+    decimals = 0
+  ) |> 
+  fmt_percent(
+    columns = c(`North America Percent`, `Maryland Percent`),
+    decimals = 1,
+    scale_values = FALSE
+  ) |> 
+  cols_label(
+    `Subclade` = "Subclade",
+    `Maryland Count` = "Maryland Count",
+    `Maryland Percent` = "Maryland Percent",
+    `North America Count` = "North America Count",
+    `North America Percent` = "North America Percent"
+  ) |> 
+  cols_align(
+    align = "center",
+    columns = everything()
+  ) |> 
+  tab_header(
+    title = "IBV Subclade Sequence Submissions\nin Maryland vs North America"
+  )
+
+table_subclade |>
+  gtsave("figures/table_subclade_frequency.docx")
+
+table_subclade |>
+  gtsave("figures/table_subclade_frequency.html")
+
+```
+
+
+# C.3 and C.3re distribution 
+
+We can use the non-down selected C.3re nextclade data to get true subclade frequencies 
+
+
+## Country Level
+
+```{r}
+library(tidyverse)
+
+nextstrain <- read.tsv(source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv)
 ```

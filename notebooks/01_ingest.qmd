@@ -171,9 +171,30 @@ csvtk -t join -f "sample_ID;seqName" \
 
 ```
 
-## 5. Enrich C.3s by Downsample gisaid HA for C.3 sequences - obtain fasta headers 
+## 5. SKIP Enrich C.3s by Downsample gisaid HA for C.3 sequences - obtain fasta headers 
 
-result: gisaid (non JHH) downsample of all C.3s with high quality genomes
+result: gisaid (non JHH) downsample of all C.3s with high quality genomes. This pulls ALL C.3s assigned by nextclade into the build thereby enriching parental C.3s.
+
+EXCLUDE ENRICHMENT FOR NOW
+
+```{shell}
+#augur filter \
+#    --metadata source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv \
+#    --sequences source/intermediate/vic/ha/sequences.fasta \
+#    --metadata-id-columns "sample_ID" \
+#    --exclude-where "area=Baltimore" \
+#    --exclude config/exclude.tsv \
+#    --query '(subclade == "C.3") and (`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
+#    --output-strains config/vic/include_c3.tsv
+```
+
+## 6. Down-select all gisaid isolates
+
+
+2025-06-28 - Update criteria to include C.3s in the augur down-selection. Remove "subclade=C.3" 
+
+Formerly included all known C.3 HA:NA reassortments
+Vaccine strains
 
 ```{shell}
 augur filter \
@@ -182,24 +203,9 @@ augur filter \
     --metadata-id-columns "sample_ID" \
     --exclude-where "area=Baltimore" \
     --exclude config/exclude.tsv \
-    --query '(subclade == "C.3") and (`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
-    --output-strains config/vic/include_c3.tsv
-```
-
-## 6. Down-select all non-C.3 gisaid isolates
-
-Also include all known C.3 HA:NA reassortments
-Vaccine strains
-```{shell}
-augur filter \
-    --metadata source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv \
-    --sequences source/intermediate/vic/ha/sequences.fasta \
-    --metadata-id-columns "sample_ID" \
-    --exclude-where "area=Baltimore" "subclade=C.3" \
-    --exclude config/exclude.tsv \
     --query '(`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
     --group-by week country \
-    --subsample-max-sequences 2000 \
+    --subsample-max-sequences 3800 \
     --subsample-seed 180 \
     --output-strains config/vic/include_gisaid.tsv
 ```

@@ -185,8 +185,6 @@ library(patchwork)
 
 ```
 
-
-
 ```{r}
 # Run Shapiro-Wilk normality tests
 shapiro_C3 <- shapiro.test(df$age[df$subclade == "C.3"])

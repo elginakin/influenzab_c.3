@@ -116,6 +116,17 @@ python TreeSort/treetime-root.py TreeSort/data/pa_tree_raw.nwk TreeSort/data/pa_
 python TreeSort/treetime-root.py TreeSort/data/np_tree_raw.nwk TreeSort/data/np_tree_raw.aln
 python TreeSort/treetime-root.py TreeSort/data/mp_tree_raw.nwk TreeSort/data/mp_tree_raw.aln
 python TreeSort/treetime-root.py TreeSort/data/ns_tree_raw.nwk TreeSort/data/ns_tree_raw.aln
+
+
+```
+run treetime for just NS 
+```{shell}
+treetime clock \
+  --tree TreeSort/data/ns_tree_raw.nwk \
+  --aln TreeSort/data/ns_tree_raw.aln \
+  --reroot oldest \
+  --plot-rtt nsrtt.png
+
 ```
 
 ## check tree and fasta congruency
@@ -263,30 +274,29 @@ plot_rtt_regression <- function(data, gene_name) {
 
   # 95% CI
   ci <- confint(model)["date", ]
-  slope_ci_str <- paste0(signif(slope, 2))
-  #slope_ci_str <- paste0(signif(slope, 2), " [", signif(ci[1], 2), ", ", signif(ci[2], 2), "]")
-  
+  slope_ci_str <- format(slope, scientific = TRUE, digits = 3)
+
+  label_text <- paste0("β = ", slope_ci_str, "\n",
+                      "R² = ", signif(r_squared, 3), "\n",
+                      "root date: ", round(root_date, 2))
+
+
   # Generate plot
   p <- ggplot(data, aes(x = date, y = `root-to-tip distance`)) +
     geom_point(alpha = 0.6, size = 1.8) +
     geom_smooth(method = "lm", se = TRUE, color = '#2C3E50') +
-    annotate("text",
-         x = max(data$date),
-         y = min(data$`root-to-tip distance`),
-         hjust = 1,
-         label = paste0("y = α + βt\n",
-                        "β = ", slope_ci_str, "\n",
-                        "R² = ", signif(r_squared, 3), "\n",
-                        "root date: ", round(root_date, 2)),
-         size = 4) +
-    labs(title = paste("Root-to-tip regression:", gene_name),
+    geom_label(
+      aes(x = -Inf, y = Inf, label = label_text),
+      hjust = -0.05, vjust = 1.1,  # adjust positioning inside the plot
+      size = 4, label.size = 0.3, fill = "white", alpha = 0.7, color = "black"
+    ) +
+    labs(title = paste(gene_name),
          x = "Date",
          y = "Root-to-tip distance") +
     theme_minimal()
-  
+
   return(p)
 }
-
 
 # Extract slope and CI from an RTT dataset
 extract_slope_ci <- function(data, gene_name) {
@@ -301,7 +311,7 @@ extract_slope_ci <- function(data, gene_name) {
   )
 }
 
-# Plot bar plot of slopes with error bars
+# Plot Estimated substitution rate (β) with 95% CI
 plot_all_slopes <- function(results_df) {
   results_df <- results_df |> 
     arrange(desc(slope)) |> 
@@ -311,13 +321,11 @@ plot_all_slopes <- function(results_df) {
     geom_col(fill = "steelblue", alpha = 0.8) +
     geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2) +
     labs(
-      title = "Estimated substitution rate (β) with 95% CI",
       x = "Segment",
       y = "Slope β"
     ) +
     theme_minimal(base_size = 14)
 }
-
 ```
 
 
@@ -353,13 +361,12 @@ p_ns  <- plot_rtt_regression(rtt_ns,  "NS")
 
 library(patchwork)
 
-(p_ha | p_na) /
-(p_pb2  | p_pb1  | p_pa) /
-(p_np | p_mp | p_ns)
+rtt_grid = (p_ha | p_na | p_pb2 | p_pb1) / (p_pa | p_np | p_mp | p_ns)
+
+ggsave(filename = 'figures/rtt_grid.png', plot = rtt_grid, height = 6, width = 12)
+
 
 ```
-
-
 
 
 
@@ -384,6 +391,31 @@ slope_results <- bind_rows(
 plot_all_slopes(slope_results)
 
 ```
+
+
+
+```{r}
+
+data = read_csv("Treesort/data/treetime_root/ns_tree_raw.aln.treetime/rtt.csv", skip = 1)
+
+# Generate plot
+p <- ggplot(data, aes(x = date, y = `root-to-tip distance`)) +
+  geom_point(alpha = 0.6, size = 1.8) +
+  geom_smooth(method = "lm", se = TRUE, color = '#2C3E50') +
+  labs(
+        x = "Date",
+        y = "Root-to-tip distance") +
+  theme_minimal()
+
+
+
+geom_label(
+    aes(x = -Inf, y = Inf, label = label_text),
+    hjust = -0.05, vjust = 1.1,  # adjust positioning inside the plot
+    size = 4, label.size = 0.3, fill = "white", alpha = 0.7, color = "black"
+  ) +
+```
+
 
 
 # try fancier
@@ -428,7 +460,7 @@ plot_rtt_regression <- function(data, gene_name, label_position = "top-left") {
       inherit.aes = FALSE
     ) +
     labs(
-      title = paste("Root-to-tip regression:", gene_name),
+      title = paste(, gene_name),
       x = "Date",
       y = "Root-to-tip distance"
     ) +
@@ -436,11 +468,35 @@ plot_rtt_regression <- function(data, gene_name, label_position = "top-left") {
   
   return(p)
 }
+```
 
+```{r}
+plot_ha = plot_rtt_regression(rtt_ha, "HA", label_position = "top-left")
+plot_na = plot_rtt_regression(rtt_ns, "NA", label_position = "top-left")
 
-plot_rtt_regression(rtt_pb2, "HA", label_position = "top-left")
+plot_pb2 = plot_rtt_regression(rtt_pb2, "PB2", label_position = "top-left")
+plot_pb1 = plot_rtt_regression(rtt_pb1, "PB1", label_position = "top-left")
+plot_pa = plot_rtt_regression(rtt_pa, "PA", label_position = "top-left")
+plot_np = plot_rtt_regression(rtt_np, "NP", label_position = "top-left")
+plot_mp = plot_rtt_regression(rtt_mp, "MP", label_position = "top-left")
+plot_ns = plot_rtt_regression(rtt_ns, "NS", label_position = "bottom-right")
 
 ```
+
+plot
+```{r}
+
+plot_ha
+plot_na
+plot_pb2
+plot_pb1
+plot_pa
+plot_np
+plot_mp
+plot_ns
+
+```
+
 
 ## pi 
 
