@@ -1,0 +1,688 @@
+---
+title: "2024-25 JHH Influenza Serology"
+date: 2025-07-14
+author: Elgin Akin
+format: html
+---
+
+# TODO
+
+# Notebook Description
+
+This notebook houses NT50 data for NH2024-25 Vaccine and Circulating Influenza viruses Isolated from the JHH network using sera collected from the 24-25 CEIRR cohort. The 24-25 CEIRR cohort is powered for NT50 comparisons by: - sex: male and female - age: binned into 3 groups: - 18-44 years of age - 45-55 years of age - 56-70 years of age
+
+# Data Ingestion Instructions
+
+## Ingested data should be present in 1 excel file across different worksheet (tabs)
+
+1.  One tab contains serology data formatted by 'tidy' standards
+2.  Another tab shoud contain a flat table with demographics including age and sex a,ong with patient ID and number for joining.
+
+## How to Update Data:
+
+1.  Navigate to the 2024-25 master serology excel spreadsheet
+2.  Navigate to the "files" pane and click "upload"
+3.  Navigate to the most rescent version of the spreadsheet and proceed to upload to the `source/` directory
+4.  Rerun the data digest code block
+
+Note: the cohort demographic data has been imported seperately and is located under `data/CEIRR_demographics.tsv`
+
+# Import, clean and configure all values
+
+1.  import serology
+2.  impoty demographics
+3.  join serology to demographics
+4.  pivot long against nt50 and auc
+5.  caluclate log2 and lo10 for auc
+6.  set limit of detections for all values
+
+```{r}
+library(readxl)
+library(tidyverse)
+library(ggdist)
+library(rstatix)
+library(tidyplots)
+library(plotly)
+
+theme_set(theme_gray(base_family = "Helvetica"))
+
+# Colors
+timepoint_colors <- c("d0" = "#F2EBE2", "d28" = "#8F9779") 
+
+virus_colors <- c(
+  "A/Victoria/4897/2022" = "#ff7f0e", 
+  "A/California/122/2022" = "#FCBA04", 
+  "B/Austria/1359417/2021" = "#A50104", 
+  "JH25260" = "#0c457d", 
+  "JH25250" = "#6bd2db", 
+  "JH25588" = "#0c457d", 
+  "JH25610" = "#6bd2db",
+  "JH24547" = "#FF5003", 
+  "JH251192" = "#00A7E1"
+)
+
+vaccine_virus_short <- c(
+  "A/Victoria/4897/2022" = "H1N1", 
+  "A/California/122/2022" = "H3N2", 
+  "B/Austria/1359417/2021" = "B/Victoria"
+)
+
+# Load and merge data
+ceirr_serology <- read_xlsx("data/serology/NH2024-25_jhh_serology_titers.xlsx", sheet = "serology")
+ceirr_demographics <- read_xlsx("data/serology/NH2024-25_jhh_serology_titers.xlsx", sheet = "demographics") %>%
+  select(-sample_number)
+
+# standarize all limits of detection to 10 - bring the 5's up to 10. 
+ceirr <- left_join(ceirr_serology, ceirr_demographics, by = "study_id") |>
+  mutate(
+    nt50_d0 = if_else(!is.na(nt50_d0) & nt50_d0 < 10, 10, nt50_d0),
+    nt50_d28 = if_else(!is.na(nt50_d28) & nt50_d28 < 10, 10, nt50_d28),
+    auc_d0 = if_else(!is.na(auc_d0) & auc_d0 == 0, 1.25, auc_d0),
+    auc_d28 = if_else(!is.na(auc_d28) & auc_d28 == 0, 1.25, auc_d28)
+  )
+
+# Tidy and transform long format
+ceirr_long <- ceirr %>%
+  pivot_longer(
+    cols = c(nt50_d0, nt50_d28, auc_d0, auc_d28),
+    names_to = c("measurement", "timepoint"),
+    names_pattern = "(nt50|auc)_d(\\d+)",
+    values_to = "value"
+  ) %>%
+  pivot_wider(names_from = measurement, values_from = value) %>%
+  mutate(
+    timepoint = paste0("d", timepoint),
+    log2_nt50 = log2(nt50),
+    log10_auc = log10(auc)
+  )
+
+# Calculate mean fold change
+ceirr_fc_by_virus <- ceirr_long %>%
+  filter(!is.na(nt50)) %>%
+  select(study_id, virus, timepoint, nt50) %>%
+  pivot_wider(names_from = timepoint, values_from = nt50) %>%
+  group_by(virus) %>%
+  mutate(fold_change = d28 / d0) %>%
+  summarise(mean_fold_change = mean(fold_change, na.rm = TRUE), .groups = "drop") %>%
+  mutate(label = paste0("x", round(mean_fold_change, 2)))
+
+# Final combined dataset with fold change
+ceirr_long_fc <- ceirr_long %>%
+  left_join(ceirr_fc_by_virus, by = "virus")
+
+# calculate patient fold change
+ceirr_long_fc <- ceirr_long_fc %>%
+  group_by(sample_number, virus) %>%
+  mutate(
+    patient_fold_change = {
+      d0 <- nt50[timepoint == "d0"]
+      d28 <- nt50[timepoint == "d28"]
+      if (length(d0) == 1 && length(d28) == 1 && !is.na(d0) && !is.na(d28)) {
+        d28 / d0
+      } else {
+        NA_real_
+      }
+    }
+  ) %>%
+  ungroup()
+
+ceirr_long_fc <- ceirr_long_fc %>%
+  group_by(sample_number, virus) %>%
+  mutate(
+    patient_fold_change = {
+      d0 <- nt50[timepoint == "d0"]
+      d28 <- nt50[timepoint == "d28"]
+      if (length(d0) == 1 && length(d28) == 1 && !is.na(d0) && !is.na(d28)) {
+        d28 / d0
+      } else {
+        NA_real_
+      }
+    },
+    patient_fold_change_auc = {
+      a0 <- auc[timepoint == "d0"]
+      a28 <- auc[timepoint == "d28"]
+      if (length(a0) == 1 && length(a28) == 1 && !is.na(a0) && !is.na(a28)) {
+        a28 / a0
+      } else {
+        NA_real_
+      }
+    }
+  ) %>%
+  ungroup()
+
+# define global limits of detection (lod or ld)
+nt50ld <- log2(20)
+aucld <- log10(2.5) #aucld <- log10(0.125) # based off a starting dilution of 1/20
+
+# Calculate Number of patients with ≤LOD values for each vaccine virus
+ceirr_sn_d0_nt50 = ceirr_long_fc |>
+  filter(timepoint == "d0") |>
+  group_by(virus) |>
+  summarize(
+    "Baseline Positive" = sum(nt50 > 10),
+    "Baseline Negative" = sum(nt50 == 10)
+  ) |>
+    pivot_longer(cols = c("Baseline Negative", "Baseline Positive"), names_to = "Response", values_to = "Count")
+
+ceirr_sn_d28_nt50 = ceirr_long_fc |>
+  filter(timepoint == "d28") |>
+  group_by(virus) |>
+  summarize(
+    "Baseline Positive" = sum(nt50 > 10),
+    "Baseline Negative" = sum(nt50 == 10)
+  ) |>
+    pivot_longer(cols = c("Baseline Negative", "Baseline Positive"), names_to = "Response", values_to = "Count")
+
+# auc seronegative
+ceirr_sn_d0_auc = ceirr_long_fc |>
+  filter(timepoint == "d0") |>
+  group_by(virus) |>
+  summarize(
+    "Baseline Positive" = sum(auc > 2.5),
+    "Baseline Negative" = sum(auc == 1.25)
+  ) |>
+    pivot_longer(cols = c("Baseline Negative", "Baseline Positive"), names_to = "Response", values_to = "Count")
+
+ceirr_sn_d28_auc = ceirr_long_fc |>
+  filter(timepoint == "d28") |>
+  group_by(virus) |>
+  summarize(
+    "Baseline Positive" = sum(auc > 2.5),
+    "Baseline Negative" = sum(auc == 1.25)
+  ) |>
+    pivot_longer(cols = c("Baseline Negative", "Baseline Positive"), names_to = "Response", values_to = "Count")
+
+```
+
+## IBV
+
+### NT50 and AUC Pre- and Post- vax
+```{r}
+## Day 0 only
+ceirr_long_fc |>
+  filter(`timepoint` == 'd0', subtype == 'Victoria') |>
+  tidyplot(x = virus, y = log2_nt50, color = virus) |>
+  add_data_points_beeswarm(alpha= 0.8, shape = 1, size = 2) |>
+  add_data_points_beeswarm(alpha= 0.6, shape = 21, color="black", size = 2) |> 
+  adjust_colors(virus_colors) |>
+  add_mean_dash(color = "black", linewidth = 0.85) |>
+  add_sem_errorbar(color = "black") |>
+  adjust_x_axis(rotate_labels = 45) |>
+  adjust_y_axis(
+    breaks = c(0, 2.5, 5, 7.5, 10, 12.5),
+    limits = c(0, 14)) |>
+  adjust_y_axis_title("$Log[2]~NT[50]$") |>
+  add_reference_lines(y=log2(20), linetype = 2, linewidth = 0.25) |> # LOD = 5 here
+  #add_annotation_text("LOD", x = 0.6, y = log2(20)) |> 
+  add_title("Day 0") |>
+  remove_legend() |>
+  remove_x_axis_title() |>
+  rename_x_axis_labels(new_names = c(
+    "B/Austria/1359417/2021" = "Vaccine",
+    "JH24547" = "23-24 C.5.1 ",
+    "JH251192" = "24-25 C.3re" )) |>
+  adjust_font(fontsize = 14) |>
+  add_test_pvalue(method = "wilcox_test" , p.adjust.method = "bonferroni", hide.ns = TRUE) |> 
+  save_plot("figures/ibv_d0_NT50.png", bg = "transparent")
+
+## Day 28 Only
+ceirr_long_fc %>% 
+  filter(`timepoint` == 'd28', subtype == 'Victoria') %>% 
+  tidyplot(x = virus, y = log2_nt50, color = virus) |>
+  add_data_points_beeswarm(alpha= 0.8, shape = 2, size = 2) |>
+  add_data_points_beeswarm(alpha= 0.6, shape = 24, color="black", size = 2) |> 
+  adjust_colors(virus_colors) |>
+  add_mean_dash(color = "black", linewidth = 0.85) |>
+  add_sem_errorbar(color = "black") |>
+  adjust_x_axis(rotate_labels = 45) |>
+  adjust_y_axis(
+    breaks = c(0, 2.5, 5, 7.5, 10, 12.5),
+    limits = c(0, 14)) |>
+  adjust_y_axis_title("$Log[2]~NT[50]$") |>
+  add_reference_lines(y=log2(20), linetype = 2, linewidth = 0.25) |> # LOD = 5 here
+  #add_annotation_text("LOD", x = 0.6, y = 3) |> 
+  add_title("Day 28") |>
+  remove_legend() |>
+  remove_x_axis_title() |>
+  rename_x_axis_labels(new_names = c(
+    "B/Austria/1359417/2021" = "Vaccine",
+    "JH24547" = "23-24 C.5.1 ",
+    "JH251192" = "24-25 C.3re" )) |>
+  adjust_font(fontsize = 14) |>
+  add_test_pvalue(method = "wilcox_test" , p.adjust.method = "bonferroni", hide.ns = TRUE) |> 
+  save_plot("figures/ibv_d28_NT50.png", bg = "transparent")
+
+# AUC
+
+## Day 0 Vaccines Only
+ceirr_long_fc |>
+  filter(`timepoint` == 'd0', subtype == 'Victoria', !is.na(log10_auc)) |> #drop any AUC rows that are NA 
+  tidyplot(x = virus, y = log10_auc, color = virus, height= 50, width = 50) |>
+  add_data_points_beeswarm(alpha= 0.8, shape = 1, size = 2) |>
+  add_data_points_beeswarm(alpha= 0.6, shape = 21, color="black", size = 2) |> 
+  adjust_colors(virus_colors) |>
+  add_mean_dash(color = "black", linewidth = 0.85) |>
+  add_sem_errorbar(color = "black") |>
+  adjust_x_axis(rotate_labels = 45) |>
+  adjust_y_axis(breaks = c(0, 1, 2, 3, 4, 5), limits = c(0, 5)) |>
+  adjust_y_axis_title("$Log[10]~AUC$") |>
+  add_reference_lines(y=log10(2.5), linetype = 2, linewidth = 0.25) |>
+  #add_annotation_text("LOD", x = 0.6, y = 0.3) |> 
+  add_title("Day 0") |>
+  remove_legend() |>
+  remove_x_axis_title() |>
+  rename_x_axis_labels(new_names = c(
+    "B/Austria/1359417/2021" = "Vaccine",
+    "JH24547" = "23-24 C.5.1 ",
+    "JH251192" = "24-25 C.3re" )) |>
+  adjust_font(fontsize = 14) |>
+  add_test_pvalue(method = "wilcox_test" , p.adjust.method = "bonferroni", hide.ns = TRUE) |> 
+  save_plot("figures/ibv_d0_AUC.png", bg = "transparent")
+
+## Day 28 Only
+ceirr_long_fc |>
+  filter(`timepoint` == 'd28', subtype == 'Victoria', !is.na(log10_auc)) |> #drop any AUC rows that are NA 
+  tidyplot(x = virus, y = log10_auc, color = virus, height= 50, width = 50) |>
+  add_data_points_beeswarm(alpha= 0.8, shape = 2, size = 2) |>
+  add_data_points_beeswarm(alpha= 0.6, shape = 24, color="black", size = 2) |> 
+  adjust_colors(virus_colors) |>
+  add_mean_dash(color = "black", linewidth = 0.85) |>
+  add_sem_errorbar(color = "black") |>
+  adjust_x_axis(rotate_labels = 45) |>
+  adjust_y_axis(breaks = c(0, 1, 2, 3, 4, 5), limits = c(0, 5)) |>
+  adjust_y_axis_title("$Log[10]~AUC$") |>
+  add_reference_lines(y=log10(2.5), linetype = 2, linewidth = 0.25) |>
+  #add_annotation_text("LOD", x = 0.6, y = 0.3) |> 
+  add_title("Day 28") |>
+  remove_legend() |>
+  remove_x_axis_title() |>
+  rename_x_axis_labels(new_names = c(
+    "B/Austria/1359417/2021" = "Vaccine",
+    "JH24547" = "23-24 C.5.1 ",
+    "JH251192" = "24-25 C.3re" )) |>
+  adjust_font(fontsize = 14) |>
+  add_test_pvalue(method = "wilcox_test" , p.adjust.method = "bonferroni", hide.ns = TRUE) |> 
+  save_plot("figures/ibv_d28_AUC.png", bg = "transparent")
+
+```
+
+# NT50 Fold Change 
+```{r}
+
+# calculate patients ≥ 4 fold change by virus
+# Vax = 19
+# JH24547 = 18
+# JH251192 = 1
+
+ceirr_long_fc |>
+  filter(subtype == "Victoria", timepoint == "d0") |>
+  tidyplot(x = virus, y = patient_fold_change , color = virus) |>
+  add_data_points_beeswarm(alpha= 1, shape = 0, size = 2) |>
+  add_data_points_beeswarm(alpha= 0.6, shape = 22, color="black", size = 2) |> 
+  add_annotation_line(y=7.9, yend=7.9, x=0.7, xend = 1.3) |> # Vaccine FC average manually enter
+  add_annotation_line(y=6.2, yend=6.2, x=1.7, xend = 2.3) |> # JH24547 FC average manually enter
+  add_annotation_line(y=1.2, yend=1.2, x=2.7, xend = 3.3) |> # JH251192 FC average manually enter
+  # add fold change text 
+  add_annotation_text("19/50", x = 1 , y = 0.45, fontsize = 10) |> # JH251192 FC average manually enter
+  add_annotation_text("18/50", x = 2 , y = 0.45, fontsize = 10) |> # JH251192 FC average manually enter
+  add_annotation_text("1/50", x = 3 , y = 0.45, fontsize = 10) |> # JH251192 FC average manually enter
+  add_test_pvalue(method = "wilcox_test" , p.adjust.method = "bonferroni", hide.ns = TRUE) |> 
+  adjust_colors(virus_colors) |>
+  adjust_x_axis(rotate_labels = 45) |>
+  adjust_y_axis_title("$NT[50]~Fold~Change$") |>
+  adjust_y_axis(transform = "log2", breaks = c(0.5, 1, 4, 32, 512), limits = c(0.1, 2000)) |>
+  add_reference_lines(y=4, linetype = 2, linewidth = 0.25) |> # SC
+  #adjust_y_axis(transform = "log2", breaks = c(0.5, 1, 4, 32, 512), limits = c(0.1, 1500)) |>
+  add_title("NT50\nFold Change") |>
+  remove_legend() |>
+  remove_x_axis_title() |>
+  rename_x_axis_labels(new_names = c(
+    "B/Austria/1359417/2021" = "Vaccine",
+    "JH24547" = "23-24 C.5.1",
+    "JH251192" = "24-25 C.3re")) |>
+  adjust_font(fontsize = 14) |>
+  save_plot("figures/ibv_fold_change.png", bg = "transparent") 
+```
+
+
+### NT50 pre-post ditribution - facet by ibv virus
+
+```{r}
+library(stats)
+
+#filter for vic only
+ibv_all_df = ceirr_long_fc %>% 
+  filter(subtype == "Victoria")
+
+# Reshape long to wide for paired test
+ibv_wide <- ibv_all_df %>%
+  select(study_id, virus, timepoint, log2_nt50) %>%
+  pivot_wider(
+    names_from = timepoint,
+    values_from = log2_nt50
+  ) %>%
+  drop_na(d0, d28)  # ensure no missing values
+
+ibv_wilcox_results <- ibv_wide %>%
+  group_by(virus) %>%
+  summarise(
+    n = n(),
+    p = wilcox.test(d28, d0, paired = TRUE)$p.value
+  ) %>%
+  mutate(
+    p.adj = p.adjust(p, method = "BH"),
+    p.adj.signif = case_when(
+      p.adj <= 0.001 ~ "***",
+      p.adj <= 0.01  ~ "**",
+      p.adj <= 0.05  ~ "*",
+      TRUE           ~ "ns"
+    )
+  )
+
+# View ibv_wilcox_results
+print(ibv_wilcox_results)
+
+#join results
+ibv_all_df <- ibv_all_df %>%
+  left_join(ibv_wilcox_results, by = "virus")
+
+# Create a summary dataframe with mean_fold_change for annotation
+annotation_data <- ibv_all_df %>%
+  group_by(virus) %>%
+  summarise(
+    mean_fold_change = first(mean_fold_change),
+    p.adj = first(p.adj)
+  )
+
+# start marginal vic plot 
+ibv_all_plot = ibv_all_df %>% 
+  ggplot(aes(x = timepoint, y = log2_nt50, fill = timepoint)) +  
+    stat_slab(color="black",
+        aes(
+            justification = ifelse(timepoint == "d0", 1.2, -.2),
+            side = ifelse(timepoint == "d0", "left", "right")
+        ),
+        expand = FALSE,
+        trim = TRUE,
+        density = "unbounded",
+        lwd = 0.5
+    ) +
+    geom_path(aes(group = study_id), alpha = 0.3, size = 0.5) + 
+    geom_point(alpha = 0.3, size = 2, shape = 21) +
+    facet_grid(~factor(virus)) + 
+    ylab(bquote(Log[2]~NT[50])) +
+    xlab("Timepoint") +
+    theme_classic() +
+    theme(
+        legend.position = "none",
+        axis.text.x = element_text(size = 14),  # Increase X-axis font size
+        axis.text.y = element_text(size = 14), 
+        axis.title = element_text(size = 14),
+        strip.background = element_blank(),  # Remove boxes around facet titles
+        strip.text = element_text(size = 14)  # Adjust facet title font size if needed
+    ) + 
+    scale_y_continuous(
+        limits = c(2, 15),  # Set Y-axis limits
+        breaks = c(2.5, 5, 7.5, 10, 12.5)  # Set Y-axis breaks
+    ) +
+    geom_hline(yintercept = log2(20), linetype = "dotted", color = "black") + # add limit of detection
+    stat_summary(
+        fun.data = "mean_cl_boot",
+        linewidth = 1,
+        size = 0.25,
+        colour = "black",
+        alpha = 0.9,
+        position = position_nudge(x = ifelse(ibv_all_df$timepoint == "d0", -0.3, 0.3)) 
+    )  + 
+    geom_text(
+        data = annotation_data,
+        aes(x = 1.5, y = 13, label = paste0("p = ", signif(p.adj, 2))),
+        inherit.aes = FALSE,
+        size = 4
+    ) +
+    geom_text(
+        data = annotation_data,
+        aes(x = 1.5, y = 14, label = paste0("x", round(mean_fold_change, 1))),
+        inherit.aes = FALSE,
+        size = 4
+    ) +
+    scale_fill_manual(values = timepoint_colors)
+  # Apply custom colors for timepoints
+
+ggsave("figures/ibv_all_nt50.png", ibv_all_plot, height = 3, width = 8)
+
+ibv_all_plot
+
+```
+
+#### Plot each virus individually 
+Normalizing kernel across all viruses using `facet()` is diminishing the visual effect of the desigram of non C.3re viruses. Plot and save individually. We'll manually add fold change and p values in figma.
+```{r}
+
+plot_virus_nt50 <- function(virus_name) {
+  # Filter the main data and annotations
+  plot_data <- ibv_all_df |> filter(virus == virus_name)
+  virus_annotations <- annotation_data |> filter(virus == virus_name)
+
+  ggplot(plot_data, aes(x = timepoint, y = log2_nt50, fill = timepoint)) +  
+    stat_slab(
+      color = "black",
+      aes(
+        justification = ifelse(timepoint == "d0", 1.2, -.2),
+        side = ifelse(timepoint == "d0", "left", "right")
+      ),
+      expand = FALSE,
+      trim = TRUE,
+      density = "unbounded",
+      lwd = 0.5
+    ) +
+    geom_path(aes(group = study_id), alpha = 0.3, size = 0.5) + 
+    geom_point(alpha = 0.3, size = 2, shape = 21) +
+    facet_grid(~factor(virus)) + 
+    ylab(bquote(Log[2]~NT[50])) +
+    xlab("Timepoint") +
+    theme_classic() +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(size = 14),
+      axis.text.y = element_text(size = 14), 
+      axis.title = element_text(size = 14),
+      strip.background = element_blank(),
+      strip.text = element_text(size = 14)
+    ) + 
+    scale_y_continuous(
+      limits = c(2, 13),
+      breaks = c(2.5, 5, 7.5, 10, 12.5)
+    ) +
+    geom_hline(yintercept = log2(20), linetype = "dotted", color = "black") +
+    stat_summary(
+      fun.data = "mean_cl_boot",
+      linewidth = 1,
+      size = 0.25,
+      colour = "black",
+      alpha = 0.9,
+      position = position_nudge(x = ifelse(plot_data$timepoint == "d0", -0.3, 0.3)) 
+    )  + 
+    geom_text(
+      data = virus_annotations,
+      aes(x = 1.5, y = 11, label = paste0("p = ", signif(p.adj, 2))),
+      inherit.aes = FALSE,
+      size = 4
+    ) +
+    geom_text(
+      data = virus_annotations,
+      aes(x = 1.5, y = 12, label = paste0("x", round(mean_fold_change, 1))),
+      inherit.aes = FALSE,
+      size = 4
+    ) +
+    scale_fill_manual(values = timepoint_colors)
+}
+
+```
+
+#### NT50 indivudual plots
+```{r}
+
+ibv_single_nt50_dist_vax <- plot_virus_nt50("B/Austria/1359417/2021")
+ibv_single_nt50_dist_547 <- plot_virus_nt50("JH24547")
+ibv_single_nt50_dist_1192 <- plot_virus_nt50("JH251192")
+
+ggsave("figures/ibv_single_nt50_dist_vax.png",ibv_single_nt50_dist_vax, height = 3, width = 3)
+ggsave("figures/ibv_single_nt50_dist_547.png",ibv_single_nt50_dist_547, height = 3, width = 3)
+ggsave("figures/ibv_single_nt50_dist_1192.png",ibv_single_nt50_dist_1192, height = 3, width = 3)
+
+```
+
+
+
+
+# AUC pre-post ditribution - facet by ibv virus
+
+```{r}
+
+library(stats)
+
+#filter for vic only
+ibv_all_df = ceirr_long_fc %>% 
+  filter(subtype == "Victoria")
+
+# Reshape long to wide for paired test
+ibv_wide_auc <- ibv_all_df %>%
+  select(study_id, virus, timepoint, log10_auc) %>%
+  pivot_wider(
+    names_from = timepoint,
+    values_from = log10_auc
+  ) %>%
+  drop_na(d0, d28)  # ensure no missing values
+
+ibv_wilcox_results_auc <- ibv_wide_auc %>%
+  group_by(virus) %>%
+  summarise(
+    n = n(),
+    p = wilcox.test(d28, d0, paired = TRUE)$p.value
+  ) %>%
+  mutate(
+    p.adj = p.adjust(p, method = "BH"),
+    p.adj.signif = case_when(
+      p.adj <= 0.001 ~ "***",
+      p.adj <= 0.01  ~ "**",
+      p.adj <= 0.05  ~ "*",
+      TRUE           ~ "ns"
+    )
+  )
+
+#join results
+ibv_all_df <- ibv_all_df %>%
+  left_join(ibv_wilcox_results_auc, by = "virus")
+
+# Create a summary dataframe with mean_fold_change for annotation
+annotation_data_auc <- ibv_all_df %>%
+  group_by(virus) %>%
+  summarise(
+    patient_fold_change_auc = mean(mean_fold_change, na.rm = TRUE),
+    p.adj = min(p.adj, na.rm = TRUE)  # or appropriate summary stat
+  )
+
+ibv_all_plot_auc = ibv_all_df %>% 
+  ggplot(aes(x = timepoint, y = log10_auc, fill = timepoint, shape = timepoint)) +  
+    stat_slab(color = "black",
+        aes(
+            justification = ifelse(timepoint == "d0", 1.2, -.2),
+            side = ifelse(timepoint == "d0", "left", "right")
+        ),
+        expand = FALSE,
+        trim = TRUE,
+        density = "unbounded",
+        lwd = 0.5
+    ) +
+    geom_path(aes(group = study_id), alpha = 0.3, size = 0.5) + 
+    geom_point(alpha = 0.3, size = 2, color = "black") +
+    scale_shape_manual(values = c("d0" = 21, "d28" = 24)) +  # add custom shapes
+    facet_grid(~factor(virus)) + 
+    ylab(bquote(Log[10]~AUC)) +
+    xlab("Timepoint") +
+    theme_classic() +
+    theme(
+        legend.position = "none",
+        axis.text.x = element_text(size = 14),  
+        axis.text.y = element_text(size = 14), 
+        axis.title = element_text(size = 14),
+        strip.background = element_blank(), 
+        strip.text = element_text(size = 14)
+    ) + 
+    geom_hline(yintercept = aucld, linetype = "dotted", color = "black") +
+    stat_summary(
+        fun.data = "mean_cl_boot",
+        linewidth = 1,
+        size = 0.25,
+        colour = "black",
+        alpha = 0.9,
+        position = position_nudge(x = ifelse(ibv_all_df$timepoint == "d0", -0.3, 0.3)) 
+    )  + 
+    geom_text(
+        data = annotation_data_auc,
+        aes(x = 1.5, y = 4, label = paste0("p = ", signif(p.adj, 2))),
+        inherit.aes = FALSE,
+        size = 4
+    ) +
+    geom_text(
+        data = annotation_data_auc,
+        aes(x = 1.5, y = 4.4, label = paste0("x", round(patient_fold_change_auc, 1))),
+        inherit.aes = FALSE,
+        size = 4
+    ) +
+    scale_fill_manual(values = timepoint_colors)
+
+ggsave("figures/ibv_all_auc.png", ibv_all_plot_auc, height = 3, width = 8)
+
+ibv_all_plot_auc
+```
+
+# NT50 Fold Change IBV
+```{r}
+
+# calculate patients ≥ 4 fold change by virus
+# Vax = 19
+# JH24547 = 18
+# JH251192 = 1
+
+ceirr_long_fc |>
+  filter(subtype == "Victoria", timepoint == "d0") |>
+  tidyplot(x = virus, y = patient_fold_change , color = virus) |>
+  add_data_points_beeswarm(alpha= 1, shape = 1, size = 2) |>
+  add_data_points_beeswarm(alpha= 0.6, shape = 21, color="black", size = 2) |> 
+  add_annotation_line(y=7.9, yend=7.9, x=0.7, xend = 1.3) |> # Vaccine FC average manually enter
+  add_annotation_line(y=6.2, yend=6.2, x=1.7, xend = 2.3) |> # JH24547 FC average manually enter
+  add_annotation_line(y=1.2, yend=1.2, x=2.7, xend = 3.3) |> # JH251192 FC average manually enter
+  # add fold change text 
+  add_annotation_text("19/50", x = 1 , y = 0.45, fontsize = 10) |> # JH251192 FC average manually enter
+  add_annotation_text("18/50", x = 2 , y = 0.45, fontsize = 10) |> # JH251192 FC average manually enter
+  add_annotation_text("1/50", x = 3 , y = 0.45, fontsize = 10) |> # JH251192 FC average manually enter
+  #add_mean_value(fontsize = 11, vjust = -10.49) |> # for some reason, the mean is the log2 transformed mean
+  #add_mean_dash(color = "black", linewidth = 0.85) |> # for some reason, the mean is the log2 transformed mean
+  #add_sem_errorbar(color = "black") |> # for some reason, the mean is the log2 transformed mean
+  add_test_pvalue(method = "wilcox_test" , p.adjust.method = "bonferroni", hide.ns = TRUE) |> 
+  adjust_colors(virus_colors) |>
+  adjust_x_axis(rotate_labels = 45) |>
+  adjust_y_axis_title("$NT[50]~Fold~Change$") |>
+  adjust_y_axis(transform = "log2", breaks = c(0.5, 1, 4, 32, 512), limits = c(0.1, 2000)) |>
+  add_reference_lines(y=4, linetype = 2, linewidth = 0.25) |> # SC
+  #adjust_y_axis(transform = "log2", breaks = c(0.5, 1, 4, 32, 512), limits = c(0.1, 1500)) |>
+  add_title("NT50\nFold Change") |>
+  remove_legend() |>
+  remove_x_axis_title() |>
+  rename_x_axis_labels(new_names = c(
+    "B/Austria/1359417/2021" = "Vaccine",
+    "JH24547" = "23-24 C.5.1",
+    "JH251192" = "24-25 C.3re")) |>
+  adjust_font(fontsize = 14) |>
+  save_plot("figures/ibv_fold_change.png", bg = "transparent") 
+```
+
+
+# Table - AUC by sex and age AUC
+
+AUC
+```{r}
+ceirr_long_fc
+```
