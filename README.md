@@ -2,10 +2,9 @@
 
 Elgin Akin, David A Villafuerte, Anne P. Werner, Matthew Pinsley, Amary Fall, Omar Abdullah, Julie M Norton, Richard Eric Rothman, Katherine Fenstermacher, Yu-Nong Gong, Eili Klein, Heba H Mostafa,  Andrew Pekosz
 
-BioRxiv Preprint doi: (https://doi.org/10.1101/2025.07.24.666632)
+BioRxiv Preprint doi: https://doi.org/10.1101/2025.07.24.666632
 
 ## Organization of this repository
---- 
 
 This repository houses all source code for the 8 segment and 1 genome [Nextstrain Build for Assessing C.3 Reassortment Rates](https://nextstrain.org/groups/PekoszLab/akine/ibvc3/vic/ha) along with all reassortment tanglegrams for the 2024-25 Influenza B season.
 
@@ -23,7 +22,7 @@ This repository houses the nextstrain segment build and genome build snakemake p
 
 Instructions: Click on each link to visualize a HA:{segment} tanglegram in auspice.
 
-> ![WARNING]
+> [!WARNING]
 > You must have access to the Pekosz Lab private nextstrain account. Contact Dr. Andy Pekosz apekosz1@ jh.edu and cc Elgin Akin (eakin1@jh.edu) for access 
 
 ##### 4 Probable C.5.1 HA reassortments with a C.3 HA in NA, NP, NS and PA 
