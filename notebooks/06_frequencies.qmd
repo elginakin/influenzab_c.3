@@ -426,7 +426,7 @@ Use [quantify_hana_glycans.py](scripts/quantify_hana_glycans.py)
 
 ```{shell}
 python scripts/quantify_hana_glycans.py \
-  -i source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv \
+  -i source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv \
   -o source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv \
   -ha ha_glycosylation \
   -na na_glycosylation
@@ -435,6 +435,7 @@ python scripts/quantify_hana_glycans.py \
 ```{r}
 library(tidyverse)
 library(lubridate)
+library(ggstream)
 
 
 glycan_colors <- c(
@@ -691,11 +692,158 @@ proportional
 
 ## Country Level
 
+### filter only to north america
 ```{r}
 library(tidyverse)
+library(ggstream)
+library(plotly)
+library(patchwork)
 
-nextstrain <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv")
+
+# import nextclade data 
+nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv") |>
+  mutate(date = if_else(str_detect(date, "2025-..-..") & !str_detect(date, "2025-\\d{2}-\\d{2}"),
+                        "2025-01-01", date),
+         date = as.Date(date))
+
+#filter out vaccine strain
+nextclade_filt <- nextclade |> 
+  filter(
+    date >= as.Date("2023-10-01") & date <= as.Date("2025-12-31"),
+    database_origin != "mostafa_lab",
+    country == "United States"
+  )
+  
+# Count occurrences of each subclade per date
+frequency <-  nextclade_filt |> 
+  count(date, subclade) |>
+  ungroup()
+
+frequency <- nextclade_filt |>
+  filter(!is.na(subclade), !is.na(date)) |>
+  mutate(month = floor_date(date, unit = "month")) |>
+  count(month, subclade) |>
+  rename(date = month) |>
+  ungroup()
+
+# Generate sequence of dates representing each week
+weekly_dates <- seq(min(frequency$date), max(frequency$date), by = "week")
+
+monthly_dates <- seq(floor_date(min(frequency$date), "month"),
+                     floor_date(max(frequency$date), "month"),
+                     by = "month")
+
+# Create the base plot
+p1 = frequency |> 
+  ggplot(aes(date, n, fill=subclade), color = "black") + 
+  scale_fill_manual(values = c(subclade_colors, "gray")) +
+  theme_classic()
+
+ridge = p1 +
+  geom_stream(sorting = "inside_out", bw = 1.2, type = "ridge", color = "black",) +
+  #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
+  scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
+  theme(legend.position = "top",
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 15),  # Increase legend text size
+        legend.title = element_text(size = 15)) +  # Increase legend title size
+  labs(y="Sequence count", x="Sequencing Date")
+
+proportional = p1 +
+  geom_stream(sorting = "inside_out", bw = 1.2, type = "proportional", color = "black",) +
+  #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
+  scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
+  theme(legend.position = "top",
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 15),  # Increase legend text size
+        legend.title = element_text(size = 15)) +  # Increase legend title size
+  labs(y="Proportion", x="Sequencing Date")
+
+ggsave('figures/NHfrequency_ridgeline.png', ridge, height = 4, width = 8)
+ggsave('figures/NHfrequency_proportional.png', proportional, height = 4, width = 8)
+
+ridge
+proportional
 ```
+
+## Global
+
+```{r}
+library(tidyverse)
+library(ggstream)
+library(plotly)
+library(patchwork)
+
+# import nextclade data 
+nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv") |>
+  mutate(date = if_else(str_detect(date, "2025-..-..") & !str_detect(date, "2025-\\d{2}-\\d{2}"),
+                        "2025-01-01", date),
+         date = as.Date(date))
+
+#filter out vaccine strain
+nextclade_filt <- nextclade |> 
+  filter(
+    date >= as.Date("2023-10-01") & date <= as.Date("2025-12-31"),
+    database_origin != "mostafa_lab"
+  )
+  
+# Count occurrences of each subclade per date
+frequency <-  nextclade_filt |> 
+  count(date, subclade) |>
+  ungroup()
+
+frequency <- nextclade_filt |>
+  filter(!is.na(subclade), !is.na(date)) |>
+  mutate(month = floor_date(date, unit = "month")) |>
+  count(month, subclade) |>
+  rename(date = month) |>
+  ungroup()
+
+# Generate sequence of dates representing each week
+weekly_dates <- seq(min(frequency$date), max(frequency$date), by = "week")
+
+monthly_dates <- seq(floor_date(min(frequency$date), "month"),
+                     floor_date(max(frequency$date), "month"),
+                     by = "month")
+
+# Create the base plot
+p1 = frequency |> 
+  ggplot(aes(date, n, fill=subclade), color = "black") + 
+  scale_fill_manual(values = c(subclade_colors, "gray")) +
+  theme_classic()
+
+ridge = p1 +
+  geom_stream(sorting = "inside_out", bw = 1.2, type = "ridge", color = "black") +
+  #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
+  scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
+  theme(legend.position = "top",
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 15),  # Increase legend text size
+        legend.title = element_text(size = 15)) +  # Increase legend title size
+  labs(y="Sequence count", x="Sequencing Date")
+
+proportional = p1 +
+  geom_stream(sorting = "inside_out", bw = 1.2, type = "proportional", color = "black") +
+  #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
+  scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
+  theme(legend.position = "top",
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 15),  # Increase legend text size
+        legend.title = element_text(size = 15)) +  # Increase legend title size
+  labs(y="Proportion", x="Sequencing Date")
+
+ggsave('figures/frequency_global_ridgeline.png', ridge, height = 4, width = 8)
+ggsave('figures/frequency_global_proportional.png', proportional, height = 4, width = 8)
+
+ridge
+proportional
+
+```
+
 
 # Multiple Allele Frequencies...
 
@@ -728,6 +876,7 @@ NA:P42Q,NA:L52S,NA:V71A,NA:I120V,NA:K220N,NA:S295R,NA:N340D,NA:K343E,NA:E358K,NA
 I want to be able to specifically reference single or multiple coding sequence and residue position from these column and extract out the alternate alleles for each for frequecny quantifcation against the date column.
 
 For example, I want to be able to specify NA positions 186 and 395 then get a frequency plot over time which shows abundance of the alternate alles for both catagorically over time. The cataogry would appear as the alt/alt alleles for each coding sequence. If I only reference 1 coding sequence, only show one. I want it to be dynamic to theoretically handle 1 or multiple coding sequences, positions and alleles while maintinating this information when plotting.
+
 
 ## Function to plot allele frequencies
 

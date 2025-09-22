@@ -538,6 +538,8 @@ ggsave("figures/ibv_single_nt50_dist_1192.png",ibv_single_nt50_dist_1192, height
 
 # AUC pre-post ditribution - facet by ibv virus
 
+# NT50
+
 ```{r}
 
 library(stats)
@@ -682,7 +684,149 @@ ceirr_long_fc |>
 
 # Table - AUC by sex and age AUC
 
-AUC
 ```{r}
-ceirr_long_fc
+library(dplyr)
+library(tidyr)
+library(purrr)
+
+# Function to calculate GMT or GM AUC
+calc_gmt <- function(x) {
+  x <- x[!is.na(x) & x > 0]
+  if (length(x) < 2) return(NA)
+  gmean <- exp(mean(log(x)))
+  gsd <- exp(sd(log(x)))
+  sprintf("%.0f (%.2f)", gmean, gsd)
+}
+
+# Set viruses and timepoints
+viruses <- c("B/Austria/1359417/2021", "JH24547", "JH251192")
+timepoints <- c("d0", "d28")
+sex_groups <- c("Female", "Male")
+age_groups <- c("18-44", "45-55", "56-70")
+
+# Function to generate one table for a given measurement column: nt50 or auc
+generate_summary_table <- function(data, value_col = "nt50") {
+  summary_rows <- list()
+  
+  for (v in viruses) {
+    for (tp in timepoints) {
+      df_sub <- data %>%
+        filter(virus == v, timepoint == tp)
+      
+      # By sex
+      sex_gmts <- map_chr(sex_groups, ~{
+        calc_gmt(df_sub[[value_col]][df_sub$sex == .x])
+      }) %>% set_names(sex_groups)
+      
+      total_sex <- calc_gmt(df_sub[[value_col]])
+      sex_p <- tryCatch({
+        if (length(unique(df_sub$sex)) == 2) {
+          wilcox.test(as.formula(paste(value_col, "~ sex")), data = df_sub)$p.value
+        } else NA
+      }, error = function(e) NA)
+      
+      # By age group
+      age_gmts <- map_chr(age_groups, ~{
+        calc_gmt(df_sub[[value_col]][df_sub$`JH-CEIRR age grouping` == .x])
+      }) %>% set_names(age_groups)
+      
+      total_age <- calc_gmt(df_sub[[value_col]])
+      age_p <- tryCatch({
+        kruskal.test(as.formula(paste(value_col, "~ `JH-CEIRR age grouping`")), data = df_sub)$p.value
+      }, error = function(e) NA)
+      
+      # Combine into one row
+      row <- tibble(
+        Variable = paste(v, tp, sep = " – "),
+        Female = sex_gmts["Female"],
+        Male = sex_gmts["Male"],
+        Total = total_sex,
+        p_value_sex = ifelse(is.na(sex_p), NA, formatC(sex_p, format = "f", digits = 3)),
+        `18-44` = age_gmts["18-44"],
+        `45-55` = age_gmts["45-55"],
+        `56-70` = age_gmts["56-70"],
+        Total_age = total_age,
+        p_value_age = ifelse(is.na(age_p), NA, formatC(age_p, format = "f", digits = 3))
+      )
+      
+      summary_rows[[length(summary_rows) + 1]] <- row
+    }
+  }
+  
+  bind_rows(summary_rows)
+}
+
+# Generate both tables
+nt50_table <- generate_summary_table(ibv_all_df, value_col = "nt50")
+auc_table <- generate_summary_table(ibv_all_df, value_col = "auc")
+
+# Add a column to distinguish the two
+nt50_table <- nt50_table %>% mutate(Measurement = "NT50")
+auc_table  <- auc_table  %>% mutate(Measurement = "AUC")
+
+# Optionally combine or print separately
+combined_table <- bind_rows(nt50_table, auc_table) %>%
+  select(Measurement, everything())
+
+# View tables
+print(nt50_table, n = Inf)
+print(auc_table, n = Inf)
+# or print(combined_table)
+
 ```
+
+## Export table
+
+
+```{r}
+library(gt)
+library(dplyr)
+library(tidyr)
+library(openxlsx)
+library(stringr)
+
+# --- Separate virus and timepoint for grouping ---
+combined_table <- combined_table %>%
+  separate(Variable, into = c("Virus", "Timepoint"), sep = " – ") %>%
+  mutate(Timepoint = factor(Timepoint, levels = c("d0", "d28"))) %>%
+  arrange(Timepoint, Virus, Measurement)
+
+# --- Create nicely formatted GT table ---
+gt_summary <- combined_table %>%
+  gt(groupname_col = "Timepoint") %>%
+  tab_header(
+    title = "Neutralization Summary by Sex and Age Group",
+    subtitle = "NT50 and AUC values across timepoints"
+  ) %>%
+  cols_label(
+    Measurement = "Measurement",
+    Virus = "Virus",
+    Female = "Female",
+    Male = "Male",
+    Total = "Total",
+    p_value_sex = "Sex p-value",
+    `18-44` = "18–44",
+    `45-55` = "45–55",
+    `56-70` = "56–70",
+    Total_age = "Total",
+    p_value_age = "Age p-value"
+  ) %>%
+  fmt_missing(everything(), missing_text = "-")
+
+# --- Preview the table ---
+gt_summary
+
+# --- Save GT table as HTML (optional for visual check) ---
+gtsave(gt_summary, "neutralization_summary_table.html")
+
+# --- Save the data as .xlsx ---
+# Optionally: reorder for Excel
+excel_out <- combined_table %>%
+  select(Timepoint, Measurement, Virus, Female, Male, Total, p_value_sex,
+         `18-44`, `45-55`, `56-70`, Total_age, p_value_age)
+
+write.xlsx(excel_out, file = "neutralization_summary_table.xlsx", rowNames = FALSE)
+
+```
+
+

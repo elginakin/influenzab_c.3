@@ -205,7 +205,7 @@ augur filter \
     --exclude config/exclude.tsv \
     --query '(`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
     --group-by week country \
-    --subsample-max-sequences 3800 \
+    --subsample-max-sequences 3500 \
     --subsample-seed 180 \
     --output-strains config/vic/include_gisaid.tsv
 ```
@@ -267,3 +267,8 @@ Visualizing subclade richness in the following datasets:
 - GISAID total 
 - GISAID + JHH
 - final downsampled + C.3 enriched 
+
+
+# Changelog
+
+- 20250818: Resolve NA and NS polytomies by broadly adding `iqtree -s {alignment} -B 1000 -alrt 1000 -T AUTO` 

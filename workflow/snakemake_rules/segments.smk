@@ -157,6 +157,15 @@ rule align:
             --fill-gaps | tee {log}
         """
 
+
+# formerly augur tree --alignment {input.alignment} --output {output.tree} | tee {log}
+
+# iqtree2 \
+#            -s {input.alignment} \
+#            -B 1000 \
+#            -alrt 1000 \
+#            -T AUTO
+
 rule raw_tree:
     message: "Building raw trees"
     input:
@@ -166,12 +175,11 @@ rule raw_tree:
     shell:
         """
         augur tree \
-            --alignment {input.alignment} \
-            --output {output.tree} | tee {log}
+             --alignment {input.alignment} \
+            --output {output.tree} | tee {log}    
         """
 
 # TODO: identify more rigorous rates for h3n2 mp,ns h1n1 mp and vic mp,ns. 
-
 def clock_rate(w):
     # Define clock rates for specific subtype and segment combinations
     # rates with "# *" " = Derived from 12y runs - https://github.com/nextstrain/seasonal-flu/blob/9a77301b4f9c58a8e948b0f7231134fcc3fe39b8/workflow/snakemake_rules/core
@@ -204,7 +212,6 @@ def clock_rate(w):
         ('vic', 'mp'): 0.00108, # source: https://nextstrain.org/groups/blab/vic/30y/egg/mp
         ('vic', 'ns'): 0.00104, # source: https://nextstrain.org/groups/blab/vic/30y/egg/ns?l=clock
     }
-
 
     # Get the rate for the given subtype and segment, or return a default value if not specified
     return rate.get((w.subtype, w.segment), 0.001)  # Default rate if not found
@@ -248,6 +255,7 @@ rule refine:
             --output-tree {output.tree} \
             --output-node-data {output.node_data} \
             --timetree \
+            --stochastic-resolve \
             --coalescent {params.coalescent} \
             --date-confidence \
             --date-inference {params.date_inference} \
@@ -263,7 +271,7 @@ rule annotate_traits:
     output:
         traits = "results/{subtype}/{segment}/traits.json"
     params:
-        columns=["clade", "subclade", "region", "country", "division"]
+        columns=["clade", "subclade", "region", "country"]
     log: 
         "logs/annotate_traits_{subtype}_{segment}.txt"
     shell:

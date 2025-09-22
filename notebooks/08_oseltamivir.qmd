@@ -1,0 +1,13 @@
+---
+title: "Oseltamivir Resistance"
+date: 2025-07-26
+author: Elgin Akin
+format: html
+---
+
+
+```{r}
+#install.packages("drda")
+
+library(drda)
+```
