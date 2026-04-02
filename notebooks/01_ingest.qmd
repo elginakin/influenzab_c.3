@@ -7,8 +7,55 @@ format: html
 
 The purpose of this data ingest pipeline to in take GISAID sequences and metadata files for santizing, de-duplicating and fomatting to input into a standard Nextstrain 8 segment and concatenated genome build pipeline.
 
+# Download sequences from GISAID
+
+Updated 4/2/2026
+- In order to gain more accurate summation of subclade frequency over time, I switched GISAID filtering to require only a cmplete HA sequence. Because GISAID restricts users to 20,000 sequences at a time, we will break up our downloads into 2 datasets. Set A which will encompass sequences between 2020-10-01 – 2025-01-01 and Set B which will capture all sequences uploaded between 2025-01-02 and 202X-XX-XX updating to the most recently desired dataset. This is a critical change since many health departments and other sequencing entities do not perform whole genome sequencing (e.g. Most B/Sydney sequences are HA and NA only). 
+
+Instruction for downloading data from GISAID 
+    - Total GISAID filters when downloading include: 
+        - Type: B
+        - Collection Date: 
+            - Reference Set A: 2020-10-01 – 2025-01-01
+            - Reference Set B: 2025-01-02 - 2026-04-01 OR the most recent desired dataset
+        - Collection Date: Complete
+        - GISRS Submission Selected
+        - Required Segments: HA
+        - Passage Details/History
+        - Only Complete
+        - Nucleotide FASTA Defline: `Isolate ID | Virus name |  Segment  | Type`
+
+
+Sequences and corresponding metadata files should be named using the following schema: 
+    Sequence file names: 
+        - Set A: seta_gisaid_vic_sequences.fasta
+        - Set B: setb_gisaid_vic_sequences.fasta
+    Metadata file names
+        - Set A: seta_gisaid_vic_metadata.xls
+        - Set B: setb_gisaid_vic_metadata.xls
+
+## Updated Sequence EPI Set iterations
+
+Local Snapshot Addendum Logs
+1. 20260318 - Included sequences collected up to Feb 1st 2026
+    - EPI_SET_260225ya, https://doi.org/10.55876/gis8.260225ya
+
+2. 20260318 - New dataset includes sequences uploaded to nextstrain up to March 18, 2026 to include novel C.3 reassortments.
+    - Date Range: 2020-02-01 to 2026-03-18
+    - Filters: Type B, Collection date (2020-02-01 to 2026-03-18), Required segments (all), Passage details/history = original, Only complete. 
+    - fasta defline  `Isolate ID | Virus name |  Segment  | Type`
+    -  EPI_Set EPI_SET_260318et, https://doi.org/10.55876/gis8.260318et
+
+3. 20260402 Updating to capture all HA sequences 
+        - Reference Set A: 2020-10-01 – 2025-01-01
+        - Reference Set B: 2025-01-02 - 2026-04-01 OR the most recent desired dataset   
+
+        - Set A:  EPI_SET_260402ha, https://doi.org/10.55876/gis8.260402ha 
+            (use in all future iterations) is now stored at
+        - Set B: 
+
 ```{shell}
-conda activate flu
+conda activate ibvc3 
 ```
 
 ## Activate
@@ -17,12 +64,34 @@ conda activate flu
 python fludb/scripts/fludb_initiate.py
 ```
 
+
 # Data Ingest 
+
+## concatenate Set A and Set B FASTA Datasets
+
+
+
+## Bind Set A and Set B metadata 
+
+```{shell}
+
+```
+
+
+### Pull strains and check for embargos
+
+```{shell}
+
+```
+## Remove sequences with ambiguous nucleotide calls and deduplicate with SeqKit
 ```{shell}
 # ibv victoria (vic)
 seqkit rmdup -n source/gisaid_vic_sequences.fasta > source/gisaid_vic_sequences.rmdup.fasta
 seqkit grep -s -r -i -p "^[ATCGatcg]+$" source/gisaid_vic_sequences.rmdup.fasta > source/gisaid_vic_sequences.rmdupn.noambig.fasta
 ```
+
+
+
 
 ## Upload CEIRR and GISAID sequences to fludb
 
@@ -57,6 +126,10 @@ python fludb/scripts/upload_vaccine.py \
 ```
 
 USE THIS SCRIPT _ TEST A SANITIZED VERSION LATER
+
+GISAID FASTA defline (header) should be in the following format: 
+- gisaid_accession | strain | segment_name | type
+- e.g. EPI_ISL_18743008|B/Sao_Paulo/357274094-IAL/2023|PB2|B
 ```{shell}
 python fludb/scripts/upload_gisaid_sanitize.py \
     -d fludb.db \
@@ -171,29 +244,29 @@ csvtk -t join -f "sample_ID;seqName" \
 
 ```
 
-## 5. SKIP Enrich C.3s by Downsample gisaid HA for C.3 sequences - obtain fasta headers 
+## 5. Enrich C.3s by Downsample gisaid HA for C.3.X lineaged sequences - obtain fasta headers
 
 result: gisaid (non JHH) downsample of all C.3s with high quality genomes. This pulls ALL C.3s assigned by nextclade into the build thereby enriching parental C.3s.
 
-EXCLUDE ENRICHMENT FOR NOW
+As of 3/18/2026, we've decided to enrich for C.3, C.3.1, and the very very minor C.3.2 lineage.
 
 ```{shell}
-#augur filter \
-#    --metadata source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv \
-#    --sequences source/intermediate/vic/ha/sequences.fasta \
-#    --metadata-id-columns "sample_ID" \
-#    --exclude-where "area=Baltimore" \
-#    --exclude config/exclude.tsv \
-#    --query '(subclade == "C.3") and (`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
-#    --output-strains config/vic/include_c3.tsv
+augur filter \
+    --metadata source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv \
+    --sequences source/intermediate/vic/ha/sequences.fasta \
+    --metadata-id-columns "sample_ID" \
+    --exclude-where "area=Baltimore" \
+    --exclude config/exclude.tsv \
+    --query '(subclade == "C.3" | subclade == "C.3.1" | subclade == "C.3.2") and (`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
+    --output-strains config/vic/include_c3.tsv
 ```
 
 ## 6. Down-select all gisaid isolates
 
-
 2025-06-28 - Update criteria to include C.3s in the augur down-selection. Remove "subclade=C.3" 
 
 Formerly included all known C.3 HA:NA reassortments
+
 Vaccine strains
 
 ```{shell}
@@ -205,7 +278,7 @@ augur filter \
     --exclude config/exclude.tsv \
     --query '(`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
     --group-by week country \
-    --subsample-max-sequences 3500 \
+    --subsample-max-sequences 2000 \
     --subsample-seed 180 \
     --output-strains config/vic/include_gisaid.tsv
 ```
@@ -217,7 +290,7 @@ augur filter \
     --metadata source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv \
     --sequences source/intermediate/vic/ha/sequences.fasta \
     --metadata-id-columns "sample_ID" \
-    --exclude-where "area!=Baltimore" \
+    --exclude-where "region!=JHH" \
     --exclude config/exclude.tsv \
     --query '(`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
     --output-strains config/vic/include_JHH.tsv
@@ -243,7 +316,6 @@ Note because we used subclade for downsample, all metadata files have clade and 
 may need to 
 1. update nextclade datasets manually
 2. Remove clade assignment from either snakemake pipeline or the metadata (meatadata may be easier...)
-
 
 # Manual Inspection of data/ sequences
 

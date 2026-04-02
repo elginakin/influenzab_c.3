@@ -1,0 +1,44 @@
+import subprocess
+
+print("Uploading IBV to the PUBLIC Pekosz Lab Nextstrain...")
+
+subtypes = {
+    "vic": ["pb2", "pb1", "pa", "ha", "np", "na", "mp", "ns", "genome"]
+}
+
+def nextstrain_login():
+    """Log in to Nextstrain CLI."""
+    print("Logging in to Nextstrain...")
+    result = subprocess.run(["nextstrain", "login"], capture_output=True, text=True)
+    
+    if result.returncode != 0:
+        print("Error logging in to Nextstrain:")
+        print(result.stderr)
+    else:
+        print("Successfully logged in to Nextstrain")
+
+def nextstrain_upload(subtype):
+    """Upload Nextstrain JSON files for a given subtype."""
+    command = ([
+        "nextstrain", "remote", "upload",
+        f"nextstrain.org/groups/PekoszLab-Public/akine/ibvc3/{subtype}"
+    ] + 
+    [f"auspice/{subtype}/{segment}.json" for segment in subtypes[subtype]] +
+    [f"auspice/{subtype}/{segment}_tip-frequencies.json" for segment in subtypes[subtype]])
+
+    print(f"Uploading data for {subtype} to Nextstrain...")
+    
+    result = subprocess.run(command, capture_output=True, text=True)
+    
+    if result.returncode != 0:
+        print(f"Error uploading data for {subtype}:")
+        print(result.stderr)
+    else:
+        print(f"Successfully uploaded data for {subtype}")
+
+# Log in to Nextstrain CLI
+nextstrain_login()
+
+# Upload data for each subtype
+for subtype in subtypes.keys():
+    nextstrain_upload(subtype)

@@ -19,6 +19,7 @@ reports/
 documents/
 TreeSort
 dedup_strains.log
+notebooks/07_serology_rotation_talk.qmd
 
 # database files 
 *.db

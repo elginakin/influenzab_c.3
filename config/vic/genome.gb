@@ -158,13 +158,6 @@ FEATURES             Location/Qualifiers
                      GDKGSGGIKGGFVHQRMESKIGRWYSRTMSKTERMGMGLYVKYDGDPWADSDALAFSGV
                      MVSMKEPGWYSFGFEIKDKKCDVPCIGIEMVHDGGKETWHSAATAIYCLMGSGQLLWDT
                      VTGVDMAL"
-     CDS             <10800..11095
-                     /gene="NB"
-                     /codon_start=3
-                     /product="NB protein"
-                     /protein_id="ADN32818.1"
-                     /translation="ATFNYTNVNPISHIRGSIIITICVSFIIILTIFGYIAKILTNRNN
-                     CTNNAIGLCKRIKCSGCEPFCNKRGDTSSPRTGVDIPAFILPGLNLSESTPN"
      CDS             12203..12949
                      /gene="M1"
                      /codon_start=1

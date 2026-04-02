@@ -163,7 +163,7 @@ rule genome_export:
     input:
         tree = rules.genome_refine.output.refined,
         metadata = rules.genome_filter.output.filtered_metadata,
-        description = "config/description.md",
+        description = "config/description_public.md",
         branch_lengths = rules.genome_refine.output.nodes,
         traits = rules.genome_traits.output.node_data,
         nt_muts = rules.genome_ancestral.output.nt_muts,

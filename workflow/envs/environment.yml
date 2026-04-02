@@ -4,6 +4,10 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - augur=24.4.0
+  - numpy=1.26.4
+  - scipy=1.10.1
+  - pandas=1.5.3
   - augur=26.0.0
   - awscli=1.27.9
   - epiweeks=2.1.2

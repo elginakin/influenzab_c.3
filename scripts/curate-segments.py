@@ -1,12 +1,11 @@
 import subprocess
 import os
 
-#"config/vic/include_c3.tsv", # removed on 2025-06-28
-
 segments = ["pb2", "pb1", "pa", "ha", "np", "na", "mp", "ns", "genome"]
 base_metadata = "source/intermediate/vic/ha/metadata_final.tsv"
 include_files = [
     "config/vic/include_gisaid.tsv",
+    "config/vic/include_c3.tsv", # enrich for C.3 and C.3.1 designated subclade genomes
     "config/vic/include_JHH.tsv",
     "config/vic/include.tsv"
 ]

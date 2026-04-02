@@ -6,6 +6,7 @@ format: html
 ---
 
 -   use the `source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv` as the input data frame
+
 -   de-duplicated by strain name
 -   location column expanded to region / country / division / location
     -   will need to look at the number of missing rows within each category...
@@ -27,7 +28,6 @@ format: html
 4.  C.5.7 distribution globally
 
 # Config
-
 ```{r}
 subclade_colors <- c("C.5.1" = "#d95f02", 
                      "C.5.5" = "#66c2a5", 
@@ -36,23 +36,26 @@ subclade_colors <- c("C.5.1" = "#d95f02",
                      "C.5" = "#e6ab02", 
                      "C.3" = "#00A7E1")
 
-subclade_colors <- c("C.5.7" = "#666666",
+subclade_colors <- c("C.5.7" = "green",
+                      "C.5.6.1" = "#051334",
                       "C.5.6" = "#051334",
                       "C.5.5" = "#66c2a5",
                       "C.5.4" = "#575482",
                       "C.5.3" = "#7570b3",
                       "C.5.2" = "#9893E1",
-                      "C.5.1" = "#d95f02",
-                      "C.5" = "#623C74", 
+                      "C.5.1" = "#FF5003",
+                      "C.5" = "#e6ab02", 
                       "C.4" = "#E4B19B",
-                      "C.3" = "#00A7E1",
+                      "C.3.1" = "#00A7E1",
+                      "C.3" = "#7876B1",
                       "C.2" = "#F2CACA",
                       "C.1" = "#F8CFCF",
-                      "C" = "#FFE2D8",
-                      "A" = "#F9DC5C",
+                      "C" = "#A50104",
+                      "A" = "grey",
                       "A.3.2" = "#FAE588",
                       "A.3.1.1" = "#FCEFB4",
                       "A.3" = "#FDF4CB")
+
 
 #Other pallettes: 
  # - https://loading.io/color/feature/DragonBall-%E3%83%89%E3%83%A9%E3%82%B4%E3%83%B3%E3%83%9C%E3%83%BC%E3%83%AB
@@ -121,7 +124,6 @@ case_count
 
 ggsave('figures/case_count.png', case_count, height = 5, width = 5)
 ```
-
 
 # Table of clinical cases by Month
 ```{r}
@@ -210,10 +212,15 @@ library(plotly)
 library(patchwork)
 
 # import nextclade data 
-nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv") |>
+nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv") |>
   mutate(date = if_else(str_detect(date, "2025-..-..") & !str_detect(date, "2025-\\d{2}-\\d{2}"),
                         "2025-01-01", date),
          date = as.Date(date))
+
+#nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv") |>
+#  mutate(date = if_else(str_detect(date, "2025-..-..") & !str_detect(date, "2025-\\d{2}-\\d{2}"),
+#                        "2025-01-01", date),
+#         date = as.Date(date))
 
 #filter out vaccine strain
 nextclade_filt = nextclade |> 
@@ -259,7 +266,6 @@ proportional = p1 +
         legend.text = element_text(size = 15),  # Increase legend text size
         legend.title = element_text(size = 15)) +  # Increase legend title size
   labs(y="Proportion", x="Sequencing Date")
-
 
 ggsave('figures/jhh_frequency_ridge.png', ridge, height = 5, width = 5)
 ggsave('figures/jhh_supplemental_frequency_ridge.png', ridge, height = 4, width = 8)
@@ -437,12 +443,10 @@ library(tidyverse)
 library(lubridate)
 library(ggstream)
 
-
 glycan_colors <- c(
     "D/EET" = "#72874EFF", 
     "NET" = "#FF746C"
 )
-
 
 # Load data
 nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv") |>

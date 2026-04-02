@@ -330,7 +330,7 @@ rule export:
     input:
         tree=rules.refine.output.tree,
         metadata=rules.augur_filter.output.filtered_metadata,
-        description="config/description.md",
+        description="config/description_public.md",
         branch_lengths=rules.refine.output.node_data,
         traits=rules.annotate_traits.output.traits,
         nt_muts=rules.infer_ancestral.output.ancestral,

@@ -118,3 +118,12 @@ quick export edit
 ```{shell}
 snakemake --cores 8 --forcerun export  
 ```
+
+
+# Export Public Builds
+
+```{shell}
+snakemake --cores 8 -R genome_export
+snakemake --cores 8 -R export
+```
+
