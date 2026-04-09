@@ -27,6 +27,21 @@ format: html
 3.  C.5.6 distribution globally
 4.  C.5.7 distribution globally
 
+
+# Generate 
+
+`source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv` as the input data frame
+
+Use [quantify_hana_glycans.py](scripts/quantify_hana_glycans.py)
+
+```{shell}
+python scripts/quantify_hana_glycans.py \
+  -i source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv \
+  -o source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv \
+  -ha ha_glycosylation \
+  -na na_glycosylation
+```
+
 # Config
 ```{r}
 subclade_colors <- c("C.5.1" = "#d95f02", 
@@ -36,8 +51,8 @@ subclade_colors <- c("C.5.1" = "#d95f02",
                      "C.5" = "#e6ab02", 
                      "C.3" = "#00A7E1")
 
-subclade_colors <- c("C.5.7" = "green",
-                      "C.5.6.1" = "#051334",
+subclade_colors <- c("C.5.7" = "#2A9429",
+                      "C.5.6.1" = "#D3D3D3",
                       "C.5.6" = "#051334",
                       "C.5.5" = "#66c2a5",
                       "C.5.4" = "#575482",
@@ -212,15 +227,15 @@ library(plotly)
 library(patchwork)
 
 # import nextclade data 
-nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv") |>
-  mutate(date = if_else(str_detect(date, "2025-..-..") & !str_detect(date, "2025-\\d{2}-\\d{2}"),
-                        "2025-01-01", date),
-         date = as.Date(date))
-
-#nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv") |>
+#nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades.tsv") |>
 #  mutate(date = if_else(str_detect(date, "2025-..-..") & !str_detect(date, "2025-\\d{2}-\\d{2}"),
 #                        "2025-01-01", date),
 #         date = as.Date(date))
+
+nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_dedup_clades_glycans.tsv") |>
+  mutate(date = if_else(str_detect(date, "2025-..-..") & !str_detect(date, "2025-\\d{2}-\\d{2}"),
+                        "2025-01-01", date),
+         date = as.Date(date))
 
 #filter out vaccine strain
 nextclade_filt = nextclade |> 
@@ -242,24 +257,30 @@ monthly_dates <- seq(floor_date(min(frequency$date), "month"),
 # Create the base plot for subclade frequency
 p1 = frequency |> 
   ggplot(aes(date, n, fill=subclade), color = "black") + 
-  scale_fill_manual(values = c(subclade_colors, "gray")) +
+  scale_fill_manual(values = subclade_colors,
+                    breaks = c("C.3", "C.5.1", "C.3.1",
+                               "C.5.6", "C.5.6.1", "C.5.7",
+                               "C.5", "C.5.5", "A")) +
   theme_classic()
 
 ridge = p1 +
   geom_stream(sorting = "inside_out", bw = 1.2, type = "ridge", color = "black",) +
-  #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
   scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +
   scale_y_continuous(breaks = c(0, 50, 100, 150, 200)) +
-  theme(legend.position = "none",
+  guides(fill = guide_legend(nrow = 3, byrow = TRUE)) +
+  theme(legend.position = "top",
         axis.title = element_text(size = 18, face = "bold"),
         axis.text = element_text(size = 16),
-        legend.text = element_text(size = 15),  # Increase legend text size
-        legend.title = element_text(size = 15)) +  # Increase legend title size
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 15)) +
   labs(y="Sequence count", x="Sequencing Date")
+ridge
+
 proportional = p1 +
   geom_stream(sorting = "inside_out", bw = 1.2, type = "proportional", color = "black",) +
   #geom_vline(xintercept = as.numeric(monthly_dates), linetype = "solid", color = "black", alpha = 0.1) +
-  scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  #
+  scale_x_date(date_labels = "%b \n %y", expand = expansion(mult = c(0.05, 0.1))) +  
+  guides(fill = guide_legend(nrow = 3)) + 
   theme(legend.position = "top",
         axis.title = element_text(size = 18, face = "bold"),
         axis.text = element_text(size = 16),
@@ -292,7 +313,7 @@ nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_de
 #filter out vaccine strain
 nextclade_filt <- nextclade |> 
   filter(
-    date >= as.Date("2023-10-01") & date <= as.Date("2025-12-31"),
+    date >= as.Date("2023-10-01") & date <= as.Date("2026-03-18"),
     database_origin != "mostafa_lab",
     country == "United States"
   )
@@ -318,7 +339,7 @@ monthly_dates <- seq(floor_date(min(frequency$date), "month"),
 
 # Create the base plot
 p1 = frequency |> 
-  ggplot(aes(date, n, fill=subclade), color = "black") + 
+  ggplot(aes(date, n, fill=subclade)) + 
   scale_fill_manual(values = c(subclade_colors, "gray")) +
   theme_classic()
 
@@ -460,7 +481,7 @@ nextclade <- read_tsv("source/intermediate/vic/ha/metadata_qc_location_clades_de
 
 # Filter to relevant entries
 nextclade_filt <- nextclade |> 
-  filter(date >= as.Date("2022-01-01") & date <= as.Date("2025-12-31")) |> 
+  filter(date >= as.Date("2022-01-01") & date <= as.Date("2026-03-18")) |> 
   filter(database_origin == "mostafa_lab") |> 
   mutate(ha_total_nglycans = as.numeric(ha_total_nglycans)) |> 
   filter(ha_total_nglycans >= 10) |> 
@@ -543,85 +564,58 @@ p_ha_ridge2 <- ha_glycan_freq |>
 
 # Aggregated subclade table
 
+Table Function
 ```{r}
 library(tidyverse)
 library(gt)
 
+# Filter by date
 nextclade_filt_table <- nextclade |> 
   filter(
-    date >= as.Date("2024-10-01") & date <= as.Date("2025-12-31")
+    date >= as.Date("2024-10-01") & date <= as.Date("2025-05-31"),
+    subclade != "A"
   )
 
-# Filter and summarize
+# Summarize by region groups
 subclade_summary <- nextclade_filt_table |> 
   filter(!is.na(subclade)) |> 
   mutate(location_group = case_when(
-    division == "Maryland" ~ "Maryland",
-    region == "North America" ~ "North America",
-    TRUE ~ NA_character_
+    region == "JHH" ~ "Johns Hopkins Hospital System (JHHS)",
+    region == "North America" & region != "JHH" ~ "North America - Excluding JHHS",
+    TRUE ~ "Global"
   )) |> 
-  filter(!is.na(location_group)) |> 
   count(location_group, subclade) |> 
-  pivot_wider(names_from = location_group, values_from = n, values_fill = 0) |> 
+  pivot_wider(names_from = location_group, values_from = n, values_fill = 0)
+
+# Calculate n (%) for each column
+subclade_summary <- subclade_summary |> 
   mutate(
-    `Maryland Percent` = Maryland / sum(Maryland) * 100,
-    `North America Percent` = `North America` / sum(`North America`) * 100
-  ) |> 
-  arrange(desc(`North America`)) |> 
-  rename(
-    `Subclade` = subclade,
-    `Maryland Count` = Maryland,
-    `North America Count` = `North America`
+    `Johns Hopkins Hospital System (JHHS)` = paste0(`Johns Hopkins Hospital System (JHHS)`, 
+                                                    " (", round(`Johns Hopkins Hospital System (JHHS)` / sum(`Johns Hopkins Hospital System (JHHS)`) * 100, 1), "%)"),
+    `North America - Excluding JHHS` = paste0(`North America - Excluding JHHS`, 
+                                              " (", round(`North America - Excluding JHHS` / sum(`North America - Excluding JHHS`) * 100, 1), "%)"),
+    `Global` = paste0(Global, " (", round(Global / sum(Global) * 100, 1), "%)")
   )
 
 # Format with gt
-subclade_summary |> 
+table_subclade <- subclade_summary |> 
   gt() |> 
-  fmt_number(columns = c(`North America Count`, `North America Percent`), decimals = 1) |> 
-  cols_label(
-    `Subclade` = "Subclade",
-    `Maryland Count` = "Maryland Count",
-    `Maryland Percent` = "Maryland Percent",
-    `North America Count` = "North America Count",
-    `North America Percent` = "North America Percent"
-  ) |> 
-  tab_header(
-    title = "IBV Subclade Sequence Submissions\nin Maryland vs North America"
-  )
-
-table_subclade = subclade_summary |> 
-  gt() |> 
-  fmt_number(
-    columns = c(`North America Count`, `Maryland Count`),
-    decimals = 0
-  ) |> 
-  fmt_percent(
-    columns = c(`North America Percent`, `Maryland Percent`),
-    decimals = 1,
-    scale_values = FALSE
-  ) |> 
-  cols_label(
-    `Subclade` = "Subclade",
-    `Maryland Count` = "Maryland Count",
-    `Maryland Percent` = "Maryland Percent",
-    `North America Count` = "North America Count",
-    `North America Percent` = "North America Percent"
-  ) |> 
   cols_align(
     align = "center",
     columns = everything()
   ) |> 
-  tab_header(
-    title = "IBV Subclade Sequence Submissions\nin Maryland vs North America"
+  tab_source_note(
+    source_note = "Data Source: JHHS and GISAID between 2024-10-01 to 2025-05-31"
   )
 
-table_subclade |>
-  gtsave("figures/table_subclade_frequency.docx")
+# Save outputs
+table_subclade |> gtsave("figures/table_subclade_frequency.docx")
+table_subclade |> gtsave("figures/table_subclade_frequency.html")
 
-table_subclade |>
-  gtsave("figures/table_subclade_frequency.html")
-
+table_subclade
 ```
+
+
 
 # C.3 and C.3re distribution in JHH
 

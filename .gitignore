@@ -58,3 +58,6 @@ slurm-*
 
 # flusort diagnostics
 scripts/flusort/flusort_out
+
+# do not track archived notebooks
+notebooks/archived

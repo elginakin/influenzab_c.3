@@ -607,10 +607,8 @@ ggsave("figures/serology_single_nt50_dist_1192-D.png",ibv_single_nt50_dist_1192_
 ## AUC
 
 Since the AUC values are not discrete integers like NT50s, we do not have to plot them individually since the ggdist histogram kernels are not muted by the number of C.3.1/re ≤LOD values.
+
 ```{r}
-
-library(stats)
-
 #filter for vic only
 ibv_all_df = ceirr_long_fc %>% 
   filter(subtype == "Victoria")
@@ -668,7 +666,8 @@ ibv_all_plot_auc = ibv_all_df %>%
         density = "unbounded",
         lwd = 0.5
     ) +
-    geom_path(aes(group = study_id), alpha = 0.3, size = 0.5) + 
+    #geom_path(aes(group = study_id), alpha = 0.3, size = 0.5) + 
+    geom_path(aes(group = study_id), alpha = 0.3, linewidth = 0.5)
     geom_point(alpha = 0.3, size = 2, color = "black") +
     scale_shape_manual(values = c("d0" = 21, "d28" = 24)) +  # add custom shapes
     facet_grid(~factor(virus_short)) + 
@@ -713,10 +712,6 @@ ibv_all_plot_auc
 
 Adding hard-coded facet formatting
 
-```{r}
-
-```
-
 # Table - AUC by sex and age AUC
 
 ```{r}
@@ -732,12 +727,6 @@ calc_gmt <- function(x) {
   gsd <- exp(sd(log(x)))
   sprintf("%.0f (%.2f)", gmean, gsd)
 }
-
-# Set viruses and timepoints
-viruses <- c("B/Austria/1359417/2021", "JH24547", "JH251192")
-timepoints <- c("d0", "d28")
-sex_groups <- c("Female", "Male")
-age_groups <- c("18-44", "45-55", "56-70")
 
 # Function to generate one table for a given measurement column: nt50 or auc
 generate_summary_table <- function(data, value_col = "nt50") {
@@ -791,6 +780,23 @@ generate_summary_table <- function(data, value_col = "nt50") {
   bind_rows(summary_rows)
 }
 
+
+```
+
+## Generate and Export table
+
+```{r}
+
+# Set viruses and timepoints
+viruses <- c("B/Austria/1359417/2021", "JH24547", "JH251192", "JH23898", "JH251192N197D")
+timepoints <- c("d0", "d28")
+sex_groups <- c("Female", "Male")
+age_groups <- c("18-44", "45-55", "56-70")
+
+#filter for vic only
+ibv_all_df = ceirr_long_fc %>% 
+  filter(subtype == "Victoria")
+
 # Generate both tables
 nt50_table <- generate_summary_table(ibv_all_df, value_col = "nt50")
 auc_table <- generate_summary_table(ibv_all_df, value_col = "auc")
@@ -808,11 +814,6 @@ print(nt50_table, n = Inf)
 print(auc_table, n = Inf)
 # or print(combined_table)
 
-```
-
-## Export table
-
-```{r}
 library(gt)
 library(dplyr)
 library(tidyr)
@@ -864,3 +865,174 @@ write.xlsx(excel_out, file = "neutralization_summary_table.xlsx", rowNames = FAL
 ```
 
 
+
+
+
+Updated Function 
+```{r}
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(FSA)   # for DunnTest
+library(rcompanion) # for posthoc adjustments
+library(gt)
+
+# --- Function to calculate GMT (geometric mean + geometric SD only) ---
+calc_gmt <- function(x) {
+  x <- x[!is.na(x) & x > 0]
+  if(length(x) < 2) return(NA)
+  gmean <- exp(mean(log(x)))
+  gsd <- exp(sd(log(x)))
+  sprintf("%.0f (%.2f)", gmean, gsd)
+}
+
+# --- Function to generate summary table with adjusted p-values ---
+generate_summary_table <- function(data, value_col = "nt50",
+                                   viruses, timepoints,
+                                   sex_groups = c("Female", "Male"),
+                                   age_groups = c("18-44", "45-55", "56-70")) {
+  
+  summary_rows <- list()
+  
+  for (v in viruses) {
+    for (tp in timepoints) {
+      df_sub <- data %>% filter(virus == v, timepoint == tp)
+      
+      # --- By sex ---
+      sex_gmts <- map_chr(sex_groups, ~{
+        vals <- df_sub[[value_col]][df_sub$sex == .x]
+        if(length(vals) < 2) return(NA)
+        calc_gmt(vals)
+      }) %>% set_names(sex_groups)
+      
+      total_sex <- calc_gmt(df_sub[[value_col]])
+      
+      # Dunn test for sex (pairwise, Bonferroni)
+      sex_p <- if(length(unique(df_sub$sex)) == 2 && nrow(df_sub) >= 4) {
+        dunn_res <- tryCatch(dunnTest(df_sub[[value_col]] ~ df_sub$sex, method="bonferroni"), error=function(e) NULL)
+        if(!is.null(dunn_res)) dunn_res$res$P.adj else NA
+      } else NA
+      sex_p <- if(!is.na(sex_p)) formatC(sex_p, format="f", digits=3) else NA
+      
+      # --- By age group ---
+      age_gmts <- map_chr(age_groups, ~{
+        vals <- df_sub[[value_col]][df_sub$`JH-CEIRR age grouping` == .x]
+        if(length(vals) < 2) return(NA)
+        calc_gmt(vals)
+      }) %>% set_names(age_groups)
+      
+      total_age <- calc_gmt(df_sub[[value_col]])
+      
+      # Kruskal-Wallis + Bonferroni-adjusted post-hoc
+      age_p <- tryCatch({
+        if(length(unique(df_sub$`JH-CEIRR age grouping`)) > 1) {
+          kw <- kruskal.test(df_sub[[value_col]] ~ df_sub$`JH-CEIRR age grouping`)
+          # Adjusted pairwise comparisons
+          pw <- dunnTest(df_sub[[value_col]] ~ df_sub$`JH-CEIRR age grouping`, method="bonferroni")
+          # Keep smallest p-value as summary
+          min(pw$res$P.adj)
+        } else NA
+      }, error=function(e) NA)
+      age_p <- if(!is.na(age_p)) formatC(age_p, format="f", digits=3) else NA
+      
+      # --- Build row ---
+      row <- tibble(
+        Variable = paste(v, tp, sep = " – "),
+        Female = sex_gmts["Female"],
+        Male = sex_gmts["Male"],
+        Total_sex = total_sex,
+        p_value_sex = sex_p,
+        `18-44` = age_gmts["18-44"],
+        `45-55` = age_gmts["45-55"],
+        `56-70` = age_gmts["56-70"],
+        Total_age = total_age,
+        p_value_age = age_p
+      )
+      
+      summary_rows[[length(summary_rows) + 1]] <- row
+    }
+  }
+  
+  bind_rows(summary_rows)
+}
+```
+
+
+
+```{r}
+# --- Define parameters ---
+viruses <- c("B/Austria/1359417/2021", "JH24547", "JH251192", "JH251192N197D", "JH23898")
+timepoints <- c("d0", "d28")
+sex_groups <- c("Female", "Male")
+age_groups <- c("18-44", "45-55", "56-70")
+
+# --- Filter data ---
+ibv_all_df <- ceirr_long_fc %>% filter(subtype == "Victoria")
+
+# --- Generate tables ---
+nt50_table <- generate_summary_table(
+  ibv_all_df, value_col = "nt50",
+  viruses = viruses, timepoints = timepoints,
+  sex_groups = sex_groups, age_groups = age_groups
+)
+
+auc_table <- generate_summary_table(
+  ibv_all_df, value_col = "auc",
+  viruses = viruses, timepoints = timepoints,
+  sex_groups = sex_groups, age_groups = age_groups
+)
+
+# --- Add Measurement ---
+nt50_table <- nt50_table %>% mutate(Measurement="NT50")
+auc_table <- auc_table %>% mutate(Measurement="AUC")
+
+combined_table <- bind_rows(nt50_table, auc_table) %>%
+  select(Measurement, everything()) %>%
+  separate(Variable, into=c("Virus","Timepoint"), sep=" – ") %>%
+  mutate(Timepoint=factor(Timepoint, levels=c("d0","d28"))) %>%
+  arrange(Timepoint, Virus, Measurement)
+
+# --- GT Table with bolding for p<0.05 ---
+gt_summary <- combined_table %>%
+  gt(groupname_col="Timepoint") %>%
+  tab_header(
+    title = "Neutralization Summary by Sex and Age Group",
+    subtitle = "GMT (±Geometric SD) of NT50 and AUC across timepoints"
+  ) %>%
+  cols_label(
+    Measurement="Measurement",
+    Virus="Virus",
+    Female="Female",
+    Male="Male",
+    Total_sex="Total (Sex)",
+    p_value_sex="Sex p-value",
+    `18-44`="18–44",
+    `45-55`="45–55",
+    `56-70`="56–70",
+    Total_age="Total (Age)",
+    p_value_age="Age p-value"
+  ) %>%
+  fmt_missing(everything(), missing_text="-") %>%
+  tab_style(
+    style = list(
+      cell_text(weight="bold")
+    ),
+    locations = cells_body(
+      columns = c(p_value_sex, p_value_age),
+      rows = as.numeric(p_value_sex) < 0.05 | as.numeric(p_value_age) < 0.05
+    )
+  )
+
+# --- Save HTML ---
+gtsave(gt_summary, "results/neutralization_summary_table.html")
+
+# --- Save Excel ---
+library(openxlsx)
+excel_out <- combined_table %>%
+  select(Timepoint, Measurement, Virus, Female, Male, Total_sex, p_value_sex,
+         `18-44`,`45-55`,`56-70`,Total_age,p_value_age)
+
+write.xlsx(excel_out, "results/neutralization_summary_table.xlsx", rowNames=FALSE)
+
+
+```

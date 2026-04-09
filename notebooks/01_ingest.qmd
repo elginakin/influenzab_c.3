@@ -69,28 +69,37 @@ python fludb/scripts/fludb_initiate.py
 
 ## concatenate Set A and Set B FASTA Datasets
 
-
+```{shell}
+cat source/seta_gisaid_epiflu_sequence.fasta \
+    source/setb_gisaid_epiflu_sequence.fasta \
+    > source/gisaid_vic_sequences.fasta
+```
 
 ## Bind Set A and Set B metadata 
 
 ```{shell}
-
+python scripts/bind_gisaid_metadata.py \
+    -i source/seta_gisaid_epiflu_isolates.xls \
+    source/setb_gisaid_epiflu_isolates.xls \
+    -o source/gisaid_vic_metadata.xls
 ```
-
 
 ### Pull strains and check for embargos
 
-```{shell}
+This will exclude them in the `augur filter` steps 
 
+```{shell}
+python scripts/identify_embargo.py \
+    -i source/gisaid_epiflu_isolates.xls \
+    -o config/exclude_embargo.tsv
 ```
+
 ## Remove sequences with ambiguous nucleotide calls and deduplicate with SeqKit
 ```{shell}
 # ibv victoria (vic)
 seqkit rmdup -n source/gisaid_vic_sequences.fasta > source/gisaid_vic_sequences.rmdup.fasta
 seqkit grep -s -r -i -p "^[ATCGatcg]+$" source/gisaid_vic_sequences.rmdup.fasta > source/gisaid_vic_sequences.rmdupn.noambig.fasta
 ```
-
-
 
 
 ## Upload CEIRR and GISAID sequences to fludb
@@ -256,7 +265,7 @@ augur filter \
     --sequences source/intermediate/vic/ha/sequences.fasta \
     --metadata-id-columns "sample_ID" \
     --exclude-where "area=Baltimore" \
-    --exclude config/exclude.tsv \
+    --exclude config/exclude.tsv config/exclude_embargo.tsv \
     --query '(subclade == "C.3" | subclade == "C.3.1" | subclade == "C.3.2") and (`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
     --output-strains config/vic/include_c3.tsv
 ```
@@ -275,7 +284,7 @@ augur filter \
     --sequences source/intermediate/vic/ha/sequences.fasta \
     --metadata-id-columns "sample_ID" \
     --exclude-where "area=Baltimore" \
-    --exclude config/exclude.tsv \
+    --exclude config/exclude.tsv config/exclude_embargo.tsv \
     --query '(`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
     --group-by week country \
     --subsample-max-sequences 2000 \
@@ -291,7 +300,7 @@ augur filter \
     --sequences source/intermediate/vic/ha/sequences.fasta \
     --metadata-id-columns "sample_ID" \
     --exclude-where "region!=JHH" \
-    --exclude config/exclude.tsv \
+    --exclude config/exclude.tsv config/exclude_embargo.tsv \
     --query '(`genome_qc.overallStatus` == "pb2:good;pb1:good;pa:good;ha:good;np:good;na:good;mp:good;ns:good")' \
     --output-strains config/vic/include_JHH.tsv
 ```
